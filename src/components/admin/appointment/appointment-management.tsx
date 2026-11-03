@@ -253,6 +253,7 @@ export default function AppointmentManagement() {
                   <th scope="col" className="px-5 py-3.5">Dokter & Jadwal</th>
                   <th scope="col" className="px-5 py-3.5">Biaya</th>
                   <th scope="col" className="px-5 py-3.5">Status</th>
+                  <th scope="col" className="px-5 py-3.5">Bukti Bayar</th>
                   <th scope="col" className="px-5 py-3.5">Antrean</th>
                   <th scope="col" className="px-5 py-3.5 text-right">Aksi</th>
                 </tr>
@@ -303,6 +304,28 @@ export default function AppointmentManagement() {
                         >
                           {statusInfo?.label || appt.status}
                         </span>
+                      </td>
+
+                      <td className="px-5 py-4">
+                        {appt.payment_proofs && appt.payment_proofs[0]?.image_url ? (
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setPreviewAppt(appt)}
+                              className="group relative h-10 w-10 shrink-0 overflow-hidden rounded-lg border border-neutral-300 bg-white hover:border-[#1B1B7A]"
+                              title="Klik untuk melihat bukti transfer"
+                            >
+                              <img
+                                src={appt.payment_proofs[0].image_url}
+                                alt="Bukti Transfer"
+                                className="h-full w-full object-cover transition group-hover:scale-110"
+                              />
+                            </button>
+                            <span className="text-xs font-medium text-green-700">Tersedia</span>
+                          </div>
+                        ) : (
+                          <span className="text-xs italic text-neutral-400">Belum ada</span>
+                        )}
                       </td>
 
                       <td className="px-5 py-4">

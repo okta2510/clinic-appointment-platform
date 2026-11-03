@@ -1,5 +1,9 @@
+'use client';
+
+import { useState } from 'react';
 import Link from 'next/link';
 import RatingStars from '@/components/user/booking/rating-stars';
+import Modal from '@/components/ui/modal';
 import { STATUS_META } from '@/constants/transaction-status';
 import { formatCountdown, formatDate, formatRupiah, formatTime } from '@/lib/format';
 import { primaryBtn, secondaryBtn } from '@/lib/styles';
@@ -13,6 +17,8 @@ type Props = {
 
 // Satu kartu reservasi di halaman riwayat
 export function AppointmentCard({ appointment, remaining }: Props) {
+  const [showProofModal, setShowProofModal] = useState(false);
+  const proof = appointment.payment_proofs?.[0];
   const waiting = appointment.status === 'waiting_payment' && remaining > 0;
   // Hold yang baru habis di browser ditampilkan kedaluwarsa sebelum data dimuat ulang
   const status = STATUS_META[appointment.status === 'waiting_payment' && !waiting ? 'expired' : appointment.status];
@@ -92,6 +98,72 @@ export function AppointmentCard({ appointment, remaining }: Props) {
           </dd>
         </div>
       </dl>
+
+      {/* Pratinjau Bukti Pembayaran */}
+      {proof?.image_url && (
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-neutral-200 bg-neutral-50/80 p-3">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setShowProofModal(true)}
+              className="group relative h-12 w-12 shrink-0 overflow-hidden rounded-xl border border-neutral-300 bg-white"
+              title="Perbesar bukti transfer"
+            >
+              <img
+                src={proof.image_url}
+                alt="Bukti Transfer"
+                className="h-full w-full object-cover transition group-hover:scale-110"
+              />
+            </button>
+            <div>
+              <p className="text-xs font-semibold text-neutral-800">Bukti Pembayaran</p>
+              <p className="text-xs text-neutral-500">
+                {proof.uploaded_at ? `Diunggah ${formatDate(proof.uploaded_at)}` : 'Telah diunggah'}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowProofModal(true)}
+            className="rounded-lg border border-neutral-300 bg-white px-3 py-1.5 text-xs font-semibold text-[#1B1B7A] hover:bg-neutral-100"
+          >
+            Lihat Bukti
+          </button>
+        </div>
+      )}
+
+      {/* Modal Popup Bukti Pembayaran Penuh */}
+      {showProofModal && proof?.image_url && (
+        <Modal
+          title={`Bukti Pembayaran #${appointment.appointment_code}`}
+          titleId={`proof-modal-${appointment.id}`}
+          onClose={() => setShowProofModal(false)}
+        >
+          <div className="space-y-4">
+            <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-neutral-100">
+              <img
+                src={proof.image_url}
+                alt={`Bukti Transfer ${appointment.appointment_code}`}
+                className="max-h-96 w-full object-contain"
+              />
+            </div>
+            {proof.rejection_reason && (
+              <p className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-800">
+                <strong>Catatan Klinik:</strong> {proof.rejection_reason}
+              </p>
+            )}
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowProofModal(false)}
+                className={secondaryBtn}
+              >
+                Tutup
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         {statusInfo}

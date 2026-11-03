@@ -87,6 +87,7 @@ export default function PaymentManagement() {
               <th scope="col" className="px-5 py-3 font-semibold">Jadwal</th>
               <th scope="col" className="px-5 py-3 font-semibold">Total</th>
               <th scope="col" className="px-5 py-3 font-semibold">Status</th>
+              <th scope="col" className="px-5 py-3 font-semibold">Bukti Bayar</th>
               <th scope="col" className="px-5 py-3 font-semibold">Antrean</th>
               <th scope="col" className="px-5 py-3 text-right font-semibold">Aksi</th>
             </tr>
@@ -95,6 +96,7 @@ export default function PaymentManagement() {
             {appointments.map((appointment) => {
               const meta = STATUS_META[appointment.status];
               const session = appointment.practice_sessions;
+              const proof = appointment.payment_proofs?.[0];
               return (
                 <tr key={appointment.id}>
                   <th scope="row" className="px-5 py-4 font-normal">
@@ -118,6 +120,24 @@ export default function PaymentManagement() {
                     >
                       {meta.label}
                     </span>
+                  </td>
+                  <td className="px-5 py-4">
+                    {proof?.image_url ? (
+                      <button
+                        type="button"
+                        onClick={() => setSelected(appointment)}
+                        className="group relative flex h-11 w-11 shrink-0 overflow-hidden rounded-xl border border-neutral-300 bg-white hover:border-[#1B1B7A]"
+                        title="Klik untuk periksa bukti transfer"
+                      >
+                        <img
+                          src={proof.image_url}
+                          alt="Bukti"
+                          className="h-full w-full object-cover transition group-hover:scale-110"
+                        />
+                      </button>
+                    ) : (
+                      <span className="text-xs italic text-neutral-400">Belum ada</span>
+                    )}
                   </td>
                   <td className="px-5 py-4 tabular-nums">{appointment.queue_number ?? '-'}</td>
                   <td className="px-5 py-4 text-right">

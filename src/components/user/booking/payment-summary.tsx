@@ -54,6 +54,23 @@ export function PaymentSummary({ appointment, status }: Props) {
             {formatRupiah(appointment.treatment_fee)}
           </dd>
         </div>
+        {appointment.payment_proofs && appointment.payment_proofs[0]?.image_url && (
+          <div className="border-t border-neutral-200 pt-3 sm:col-span-2">
+            <dt className="text-sm font-semibold text-neutral-800 mb-1.5">Bukti transfer terunggah</dt>
+            <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-neutral-100 max-w-sm">
+              <img
+                src={appointment.payment_proofs[0].image_url}
+                alt="Bukti pembayaran"
+                className="max-h-64 w-full object-contain"
+              />
+            </div>
+            {appointment.payment_proofs[0].rejection_reason && (
+              <p className="mt-2 text-xs text-red-700">
+                <strong>Alasan penolakan:</strong> {appointment.payment_proofs[0].rejection_reason}
+              </p>
+            )}
+          </div>
+        )}
       </dl>
     </section>
   );
