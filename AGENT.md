@@ -146,6 +146,11 @@ Approved future additions (one each, only in the phase that needs it): **vitest 
 - Small commits, Conventional Commits, with the message in Indonesian.
 - Don't push, force-push, or rewrite history unless the user asks.
 
+**Complexity**
+- Keep it simple. Avoid clever abstractions, over-engineered patterns, or premature optimizations
+- makesure new programmer can understand the code easily. Favor readability over cleverness.
+
+
 ---
 
 ## 6. Atomic design rule
