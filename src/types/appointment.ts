@@ -17,6 +17,7 @@ export type TRating = {
 };
 
 export type TSlot = {
+  schedule_id?: string;
   start_time: string; // "09:00"
   end_time: string;
   quota: number;
@@ -72,6 +73,7 @@ export type TAppointmentCreate = {
   doctor_id: string;
   session_date: string; // YYYY-MM-DD
   start_time: string; // HH:mm
+  schedule_id?: string;
 };
 
 // Response admin: tanpa qr_token & aksi pasien, dengan data pasien

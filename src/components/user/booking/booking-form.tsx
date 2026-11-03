@@ -53,23 +53,28 @@ export default function BookingForm({ treatment }: Props) {
     onError: (error) => {
       const message = getApiErrorMessage(error, 'Gagal membuat reservasi.');
       const status = getApiStatus(error);
-      if (status === 409 && message.includes('quota')) {
+      const lower = message.toLowerCase();
+      if ((status === 409 && lower.includes('quota')) || lower.includes('kuota')) {
         setErrors({ slot: 'Kuota jadwal ini baru saja penuh. Silakan pilih jadwal lain.' });
         setStartTime('');
         availability.refetch();
-      } else if (status === 409 && message.includes('already'))
-        setErrors({ slot: 'Anda sudah punya reservasi di jadwal ini.' });
-      else if (status === 422 && message.includes('started')) {
-        setErrors({ slot: 'Jadwal ini sudah dimulai. Silakan pilih jadwal lain.' });
+      } else if (lower.includes('sudah punya') || lower.includes('already') || status === 409) {
+        setErrors({ slot: 'Anda sudah punya reservasi aktif di jadwal ini.' });
+      } else if (
+        (status === 422 && lower.includes('started')) ||
+        lower.includes('sudah dimulai') ||
+        lower.includes('sudah lewat')
+      ) {
+        setErrors({ slot: 'Jadwal ini sudah dimulai atau lewat. Silakan pilih jadwal lain.' });
         setStartTime('');
         availability.refetch();
-      } else if (status === 422 && message.includes('not available')) {
+      } else if (lower.includes('tidak tersedia') || lower.includes('tidak sesuai')) {
         setErrors({ slot: 'Jadwal ini sudah tidak tersedia. Silakan pilih jadwal lain.' });
         setStartTime('');
         availability.refetch();
-      } else if (status === 401) {
-        setServerError('Sesi Anda berakhir. Silakan masuk kembali.');
-      } else if (status === 404 && message.includes('treatment')) {
+      } else if (status === 401 || lower.includes('login') || lower.includes('sesi')) {
+        setServerError('Sesi Anda berakhir atau belum masuk. Silakan masuk kembali.');
+      } else if (status === 404 && lower.includes('treatment')) {
         setServerError('Treatment ini belum bisa dipesan online. Silakan hubungi klinik.');
       } else {
         setServerError(message);
@@ -88,11 +93,14 @@ export default function BookingForm({ treatment }: Props) {
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length) return;
 
+    const selectedSlot = slots.find((s) => s.start_time === startTime);
+
     createAppointment.mutate({
       treatment_slug: treatment.slug,
       doctor_id: doctorId,
       session_date: date,
       start_time: startTime,
+      schedule_id: selectedSlot?.schedule_id,
     });
   }
 

@@ -68,7 +68,8 @@ export default function PaymentUpload() {
     );
   }
 
-  const bookingHref = `/treatment/${appointment.treatments.slug}/booking`;
+  const treatmentSlug = appointment.treatments?.slug || 'acne-dermapeel';
+  const bookingHref = `/treatment/${treatmentSlug}/booking`;
   const isExpired =
     expiredByServer ||
     appointment.status === 'expired' ||

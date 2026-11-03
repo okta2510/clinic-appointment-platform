@@ -150,9 +150,17 @@ function normalizeName(name: string) {
   return name.toLowerCase().replace(/&/g, 'and').replace(/\s+/g, ' ').trim();
 }
 
-// Spesialisasi dokter = kategori treatment yang ditangani (mis. spesialis "Acne And Scar"
-// menangani semua treatment kategori "Acne & Scar")
+// Spesialisasi dokter yang menangani treatment klinik:
+// - Dokter Umum & Spesialis Kulit & Kelamin menangani seluruh perawatan estetika & kulit
+// - Jika nama spesialisasi sama persis dengan kategori, cocokkan
+// - Sebagai fallback, seluruh dokter aktif di klinik dapat melayani konsultasi perawatan
 export function isSpecialistForCategory(specialistName: string | undefined, category: Category) {
-  if (!specialistName) return false;
-  return normalizeName(specialistName) === normalizeName(category);
+  if (!specialistName) return true;
+  const s = normalizeName(specialistName);
+  const c = normalizeName(category);
+
+  if (s === c) return true;
+  if (s.includes('kulit') || s.includes('umum') || s.includes('estetika')) return true;
+
+  return true;
 }
