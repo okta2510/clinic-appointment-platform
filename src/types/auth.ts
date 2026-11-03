@@ -1,4 +1,4 @@
-// Bentuk data mengikuti response backend (Mini-Project.api/src/features/auths)
+// Tipe data autentikasi pengguna
 
 export type TRole = 'ADMIN' | 'STAFF' | 'DOCTOR' | 'PATIENT';
 

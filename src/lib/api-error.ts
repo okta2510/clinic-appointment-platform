@@ -1,12 +1,47 @@
-import type { AxiosError } from 'axios';
-
-// Ambil pesan dari response backend { success, message, data }
+// Ambil pesan dari response backend / Supabase Auth & Postgrest
 export function getApiErrorMessage(error: unknown, fallback: string) {
-  const axiosError = error as AxiosError<{ message?: string }>;
-  if (!axiosError?.response) return 'Tidak dapat terhubung ke server.';
-  return axiosError.response.data?.message || fallback;
+  if (!error) return fallback;
+  if (typeof error === 'string') return error;
+
+  const errObj = error as {
+    message?: string;
+    error_description?: string;
+    details?: string;
+    response?: { data?: { message?: string }; status?: number };
+  };
+
+  // Response dari axios (legacy jika masih ada)
+  if (errObj.response?.data?.message) {
+    return errObj.response.data.message;
+  }
+
+  // Response dari Supabase Auth / Postgrest / JS Error
+  if (errObj.message) {
+    // Terjemahkan beberapa pesan umum Supabase Auth ke Bahasa Indonesia yang ramah
+    if (errObj.message.includes('Invalid login credentials')) {
+      return 'Email atau password salah. Silakan coba lagi.';
+    }
+    if (errObj.message.includes('User already registered')) {
+      return 'Email ini sudah terdaftar. Silakan masuk.';
+    }
+    if (errObj.message.includes('Password should be at least')) {
+      return 'Password minimal 8 karakter.';
+    }
+    return errObj.message;
+  }
+
+  if (errObj.error_description) {
+    return errObj.error_description;
+  }
+
+  if (errObj.details) {
+    return errObj.details;
+  }
+
+  return fallback;
 }
 
 export function getApiStatus(error: unknown) {
-  return (error as AxiosError)?.response?.status;
+  const errObj = error as { status?: number; response?: { status?: number } };
+  return errObj.status ?? errObj.response?.status;
 }

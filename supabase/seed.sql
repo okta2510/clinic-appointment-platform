@@ -45,13 +45,64 @@ insert into public.doctor_schedules (doctor_id, day_of_week, start_time, end_tim
 on conflict (doctor_id, day_of_week, start_time) do nothing;
 
 -- -----------------------------------------------------------------------------
--- Akun admin
+-- Akun Demo Pengujian (Admin & Pasien)
 -- -----------------------------------------------------------------------------
--- 1. Buat user lewat Dashboard → Authentication → Users → "Add user"
---    (contoh: admin@klinik.test, centang "Auto Confirm User").
--- 2. Jalankan perintah ini di SQL Editor:
---
---    update public.profiles
---    set role = 'admin', full_name = 'Admin Klinik'
---    where id = (select id from auth.users where email = 'admin@klinik.test');
+-- Admin : admin@klinik.test  | Password: Admin123!
+-- Pasien: pasien@klinik.test | Password: Pasien123!
+-- -----------------------------------------------------------------------------
+create extension if not exists "pgcrypto";
 
+-- Hapus dulu jika sebelumnya pernah ada row yang gagal/parsial
+delete from auth.users where email in ('admin@klinik.test', 'pasien@klinik.test');
+
+do $$
+declare
+  v_admin_id uuid := 'aaaaaaaa-1111-1111-1111-aaaaaaaaaaaa';
+  v_patient_id uuid := 'bbbbbbbb-2222-2222-2222-bbbbbbbbbbbb';
+begin
+  -- 1. Buat User Admin Demo
+  insert into auth.users (
+    instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
+    raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
+    confirmation_token, email_change, email_change_token_new, recovery_token
+  ) values (
+    '00000000-0000-0000-0000-000000000000', v_admin_id, 'authenticated', 'authenticated',
+    'admin@klinik.test', crypt('Admin123!', gen_salt('bf')), now(),
+    '{"provider":"email","providers":["email"]}'::jsonb,
+    '{"full_name":"Admin Utama Klinik"}'::jsonb, now(), now(),
+    '', '', '', ''
+  );
+
+  insert into auth.identities (
+    id, user_id, provider_id, identity_data, provider, last_sign_in_at, created_at, updated_at
+  ) values (
+    gen_random_uuid(), v_admin_id, v_admin_id::text,
+    format('{"sub":"%s","email":"admin@klinik.test"}', v_admin_id)::jsonb,
+    'email', now(), now(), now()
+  );
+
+  update public.profiles set role = 'admin', full_name = 'Admin Utama Klinik' where id = v_admin_id;
+
+  -- 2. Buat User Pasien Demo
+  insert into auth.users (
+    instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
+    raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
+    confirmation_token, email_change, email_change_token_new, recovery_token
+  ) values (
+    '00000000-0000-0000-0000-000000000000', v_patient_id, 'authenticated', 'authenticated',
+    'pasien@klinik.test', crypt('Pasien123!', gen_salt('bf')), now(),
+    '{"provider":"email","providers":["email"]}'::jsonb,
+    '{"full_name":"Budi Pasien Demo","phone_number":"08123456789"}'::jsonb, now(), now(),
+    '', '', '', ''
+  );
+
+  insert into auth.identities (
+    id, user_id, provider_id, identity_data, provider, last_sign_in_at, created_at, updated_at
+  ) values (
+    gen_random_uuid(), v_patient_id, v_patient_id::text,
+    format('{"sub":"%s","email":"pasien@klinik.test"}', v_patient_id)::jsonb,
+    'email', now(), now(), now()
+  );
+
+  update public.profiles set role = 'patient', full_name = 'Budi Pasien Demo', phone_number = '08123456789' where id = v_patient_id;
+end $$;
