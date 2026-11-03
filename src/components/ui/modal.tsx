@@ -4,7 +4,7 @@ import { useEffect, useRef } from 'react';
 
 type Props = {
   title: string;
-  titleId: string;
+  titleId?: string;
   onClose: () => void;
   /** Cegah menutup (Escape / tombol tutup) saat proses berjalan */
   locked?: boolean;
@@ -13,7 +13,13 @@ type Props = {
 
 // Native <dialog>: fokus terkunci di dalam modal & Escape menutup modal.
 // Modal ditutup dengan meng-unmount komponen ini (onClose dari parent).
-export default function Modal({ title, titleId, onClose, locked, children }: Props) {
+export default function Modal({
+  title,
+  titleId = 'modal-title',
+  onClose,
+  locked,
+  children,
+}: Props) {
   const dialogRef = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
