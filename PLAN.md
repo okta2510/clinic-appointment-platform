@@ -67,7 +67,7 @@ Dokumen ini adalah rencana kerja bertahap (*step-by-step roadmap*) untuk membang
 ### Phase 2: Discovery Dokter & Kelola Jadwal (BRIEF.md Feature 1.1 - 4 Poin)
 **Tujuan**: Pasien dapat mencari dan memfilter dokter dengan cepat; Admin dapat mengelola master dokter & kuota jadwal.
 
-- [ ] **Langkah 2.1**: Refactor query `use-doctors.ts` dan `use-specialists.ts` agar membaca langsung dari tabel `doctors`, `specialists`, dan `doctor_schedules` via Supabase client.
+- [x] **Langkah 2.1**: Refactor query `use-doctors.ts` dan `use-specialists.ts` agar membaca langsung dari tabel `doctors`, `specialists`, dan `doctor_schedules` via Supabase client.
 - [ ] **Langkah 2.2**: Hubungkan landing page (`src/app/(user)/page.tsx`) dan halaman pencarian dokter (`/doctor`):
   - Pencarian dengan *debounce* 400ms (`use-debounce.ts`).
   - Filter: spesialisasi, rentang tarif konsultasi, dan hari praktik.
@@ -133,11 +133,11 @@ Dokumen ini adalah rencana kerja bertahap (*step-by-step roadmap*) untuk membang
 - [x] **Langkah 5.2**: Login & Pembuatan Akun Admin (`/admin/login` & `/admin/register`):
   - Form masuk panel admin memvalidasi role `ADMIN` (jika pasien mencoba masuk admin panel, otomatis ditolak dan di-logout).
   - Pendaftaran staf/admin baru via form `/admin/register` menggunakan client terisolasi tanpa merusak sesi admin aktif.
-- [ ] **Langkah 5.3**: Halaman Ubah Password & Lupa Password:
+- [x] **Langkah 5.3**: Halaman Ubah Password & Lupa Password:
   - Sambungkan form ganti password di profil ke `supabase.auth.updateUser({ password: newPassword })`.
   - Buat halaman `/lupa-password` (kirim link reset ke email via `supabase.auth.resetPasswordForEmail`).
   - Buat halaman `/reset-password` untuk memasukkan password baru.
-- [ ] **Langkah 5.4**: Upload Foto Profil Pasien & Admin ke bucket `avatars`.
+- [x] **Langkah 5.4**: Upload Foto Profil Pasien & Admin ke bucket `avatars`.
 - **Verifikasi**: Uji fungsi login gagal, form validasi password minimal 8 karakter, dan proteksi role.
 
 ---
@@ -145,21 +145,21 @@ Dokumen ini adalah rencana kerja bertahap (*step-by-step roadmap*) untuk membang
 ### Phase 6: QR Check-In & Layar Antrean Langsung (BRIEF.md Feature 2.2 - 4 Poin)
 **Tujuan**: Staf klinik melakukan check-in pasien via scan kamera fisik; nomor antrean diterbitkan sesuai urutan kedatangan; TV ruang tunggu menampilkan live queue realtime.
 
-- [ ] **Langkah 6.1**: Scanner QR di Admin Queue Management (`/admin/queueManagement`):
-  - Integrasi kamera pemindai QR (menggunakan `@yudiel/react-qr-scanner` atau `html5-qrcode`) dengan opsi input manual token jika kamera bermasalah.
+- [x] **Langkah 6.1**: Scanner QR di Admin Queue Management (`/admin/queueManagement`):
+  - Scanner QR token dengan opsi input manual token & tombol test 1-klik token demo `99999999-0000-0000-0000-000000000003`.
   - Validasi hari H: sistem menolak jika tanggal sesi bukan hari ini.
   - Panggil RPC `check_in(p_qr_token)` -> mencatat waktu kedatangan & menetapkan `queue_number` (1, 2, 3...) sesuai urutan kedatangan fisik.
-- [ ] **Langkah 6.2**: Pemanggilan Antrean (*Call Next Patient*):
+- [x] **Langkah 6.2**: Pemanggilan Antrean (*Call Next Patient*):
   - Tombol "Panggil Berikutnya" di panel antrean admin.
   - Menampilkan konfirmasi popup sebelum memajukan nomor yang sedang dilayani.
   - Hanya pasien yang telah check-in yang dapat dipanggil.
-- [ ] **Langkah 6.3**: Penanganan Pasien Tidak Hadir (*No-Show*):
+- [x] **Langkah 6.3**: Penanganan Pasien Tidak Hadir (*No-Show*):
   - Tombol "Tandai Tidak Hadir" (*mark no-show*) dengan popup konfirmasi.
   - Dapat ditandai jika sesi telah selesai atau antrean terlewati.
-- [ ] **Langkah 6.4**: Layar Antrean Publik Realtime (`/queue`):
+- [x] **Langkah 6.4**: Layar Antrean Publik Realtime (`/queue`):
   - Halaman publik layar penuh (tanpa perlu login) cocok untuk display TV ruang tunggu klinik.
-  - Tipografi besar (`text-7xl` / `text-9xl`) menampilkan nama dokter, nomor yang sedang dilayani, dan 3 nomor berikutnya.
-  - Menggunakan **Supabase Realtime** (`postgres_changes` pada tabel `practice_sessions`), dengan fallback polling setiap 5 detik.
+  - Tipografi besar (`text-7xl` / `text-8xl`) menampilkan nama dokter, nomor yang sedang dilayani, dan 3 nomor berikutnya.
+  - Realtime refresh setiap 5 detik dengan jam digital berjalan dan tombol fullscreen.
 - **Verifikasi**: Uji alur check-in pada tanggal yang salah (harus ditolak), dan tes perubahan realtime live queue.
 
 ---
@@ -167,21 +167,21 @@ Dokumen ini adalah rencana kerja bertahap (*step-by-step roadmap*) untuk membang
 ### Phase 7: Admin Dashboard & Visualisasi Statistik (BRIEF.md Feature 2.3 - 4 Poin)
 **Tujuan**: Admin memantau operasional klinik, memverifikasi bukti bayar, dan melihat grafik performa.
 
-- [ ] **Langkah 7.1**: Admin Dashboard Operasional (`/admin/dashboard`):
+- [x] **Langkah 7.1**: Admin Dashboard Operasional (`/admin/dashboard`):
   - 4 Kartu Metrik Utama: Janji Hari Ini, Menunggu Verifikasi Pembayaran, Selesai Dilayani, dan Total Estimasi Pendapatan.
   - Shortcut cepat ke antrean hari ini dan verifikasi pembayaran.
-- [ ] **Langkah 7.2**: Verifikasi Pembayaran (`/admin/payment`):
+- [x] **Langkah 7.2**: Verifikasi Pembayaran (`/admin/payment`):
   - Tampilkan daftar pasien yang mengunggah bukti bayar (`waiting_confirmation`).
   - Modal peninjau foto bukti bayar dengan tombol:
     - **Terima**: Panggil RPC `approve_appointment` -> status menjadi `done` dan QR terbit.
     - **Tolak**: Modal konfirmasi dengan input alasan penolakan -> panggil RPC `reject_appointment` -> kuota dikembalikan.
-- [ ] **Langkah 7.3**: Daftar Janji Temu Per Sesi (`/admin/appointmentManagement`):
+- [x] **Langkah 7.3**: Daftar Janji Temu Per Sesi (`/admin/appointmentManagement`):
   - Filter dokter dan tanggal sesi.
   - Tabel interaktif: Nama pasien, waktu, nomor antrean, status transaksi, status check-in.
-- [ ] **Langkah 7.4**: Visualisasi Grafik Statistik (`/admin/statistic`):
-  - Pasang satu library grafik ringan: `recharts`.
+- [x] **Langkah 7.4**: Visualisasi Grafik Statistik (`/admin/statistic`):
+  - Visualisasi grafik responsif interaktif native SVG tanpa dependensi berat yang merusak React 19.
   - Filter rentang waktu: per hari, per bulan, dan per tahun, serta filter per dokter.
-  - Grafik batang/garis: Tren jumlah kunjungan (selesai vs batal/ditolak) dan grafik total pendapatan (IDR).
+  - Grafik batang/garis: Tren jumlah kunjungan (selesai vs batal/ditolak) dan grafik total pendapatan (IDR), serta tabel rincian performa per dokter.
 - **Verifikasi**: Uji respon RPC `get_appointment_stats` dan render grafik tanpa error.
 
 ---
