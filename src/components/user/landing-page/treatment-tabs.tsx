@@ -37,7 +37,7 @@ export function TreatmentTabs() {
   }
 
   return (
-    <section className="mx-auto w-full max-w-6xl px-5 py-10 md:px-8 md:py-16">
+    <section className="mx-auto w-full max-w-6xl px-5 py-10 md:px-8 md:py-16 bg-white">
       <h2
         className="text-2xl font-bold leading-tight tracking-tight sm:text-3xl md:text-4xl"
         style={{ color: NAVY }}

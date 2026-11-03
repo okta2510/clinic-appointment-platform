@@ -7,7 +7,7 @@ export default function DoctorPage() {
   return (
     <section
       aria-labelledby="doctors-heading"
-      className="mx-auto w-full max-w-6xl px-5 py-12 md:px-8 md:py-16"
+      className="mx-auto w-full max-w-6xl px-5 py-12 md:px-8 md:py-16 bg-white"
     >
       <h1
         id="doctors-heading"

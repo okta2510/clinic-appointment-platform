@@ -304,7 +304,7 @@ as $$
     coalesce(b.booked, 0)                       as booked,
     greatest(coalesce(ps.patient_quota, s.patient_quota) - coalesce(b.booked, 0), 0) as remaining,
     (coalesce(ps.patient_quota, s.patient_quota) - coalesce(b.booked, 0)) > 0
-      and ((p_date + s.start_time) at time zone 'Asia/Jakarta') > now() as available
+      and ((p_date + s.end_time) at time zone 'Asia/Jakarta') > now() as available
   from public.doctor_schedules s
   join public.doctors d on d.id = s.doctor_id and d.is_active
   left join public.practice_sessions ps
@@ -355,8 +355,8 @@ begin
     raise exception 'Dokter tidak aktif';
   end if;
 
-  if ((p_date + v_schedule.start_time) at time zone 'Asia/Jakarta') <= now() then
-    raise exception 'Sesi sudah dimulai atau sudah lewat';
+  if ((p_date + v_schedule.end_time) at time zone 'Asia/Jakarta') <= now() then
+    raise exception 'Sesi praktik sudah selesai atau sudah lewat';
   end if;
 
   insert into public.practice_sessions (
@@ -407,8 +407,8 @@ as $$
 declare
   v_result public.appointments;
 begin
-  if split_part(p_path, '/', 1) <> auth.uid()::text then
-    raise exception 'Lokasi file bukti bayar tidak valid';
+  if not (p_path like 'data:image/%' or split_part(p_path, '/', 1) = auth.uid()::text) then
+    raise exception 'Lokasi atau format file bukti bayar tidak valid';
   end if;
 
   update public.appointments
@@ -522,11 +522,11 @@ begin
   where a.id = p_appointment_id
     and s.id = a.session_id
     and a.status = 'waiting_confirmation'
-    and s.starts_at > now()
+    and s.ends_at > now()
   returning a.* into v_result;
 
   if not found then
-    raise exception 'Janji tidak bisa dikonfirmasi (status salah atau sesi sudah mulai)';
+    raise exception 'Janji tidak bisa dikonfirmasi (status salah atau sesi sudah selesai)';
   end if;
 
   return v_result;

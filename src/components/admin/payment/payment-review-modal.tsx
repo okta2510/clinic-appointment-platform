@@ -122,14 +122,24 @@ export default function PaymentReviewModal({ appointment, onClose, onSuccess }: 
             alt={`Bukti pembayaran ${code}`}
             className="mt-2 max-h-96 w-full rounded-2xl border border-neutral-200 object-contain"
           />
-          <a
-            href={proof.image_url}
-            target="_blank"
-            rel="noreferrer"
-            className="mt-2 inline-flex min-h-11 items-center font-semibold text-[#1B1B7A] underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1B1B7A]"
+          <button
+            type="button"
+            onClick={() => {
+              if (proof.image_url.startsWith('data:image')) {
+                const w = window.open('');
+                if (w) {
+                  w.document.write(
+                    `<!DOCTYPE html><html><head><title>Bukti Pembayaran ${code}</title></head><body style="margin:0;background:#111;display:flex;justify-content:center;align-items:center;min-height:100vh;"><img src="${proof.image_url}" style="max-width:100%;max-height:100vh;object-fit:contain;" /></body></html>`,
+                  );
+                }
+              } else {
+                window.open(proof.image_url, '_blank', 'noopener,noreferrer');
+              }
+            }}
+            className="mt-2 inline-flex min-h-11 items-center font-semibold text-[#1B1B7A] underline underline-offset-4 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1B1B7A]"
           >
             Buka ukuran penuh<span className="sr-only"> (tab baru)</span>
-          </a>
+          </button>
           {proof.rejection_reason && (
             <p className="mt-2 text-neutral-800">
               <strong>Alasan penolakan:</strong> {proof.rejection_reason}

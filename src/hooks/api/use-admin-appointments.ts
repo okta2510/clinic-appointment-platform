@@ -31,7 +31,10 @@ function mapToAdminAppointment(row: any, publicUrlBase: string): TAdminAppointme
 
   let proofUrl = '';
   if (row.payment_proof_path) {
-    if (row.payment_proof_path.startsWith('http')) {
+    if (
+      row.payment_proof_path.startsWith('data:image') ||
+      row.payment_proof_path.startsWith('http')
+    ) {
       proofUrl = row.payment_proof_path;
     } else {
       proofUrl = `${publicUrlBase}/storage/v1/object/public/payment-proofs/${row.payment_proof_path}`;

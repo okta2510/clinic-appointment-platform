@@ -5,6 +5,7 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase/client';
+import { compressImageToBase64 } from '@/lib/image-compression';
 import type {
   TApiError,
   TApiSuccessResponse,
@@ -30,7 +31,10 @@ function mapToPatientAppointment(row: any, publicUrlBase: string): TAppointment 
 
   let proofUrl = '';
   if (row.payment_proof_path) {
-    if (row.payment_proof_path.startsWith('http')) {
+    if (
+      row.payment_proof_path.startsWith('data:image') ||
+      row.payment_proof_path.startsWith('http')
+    ) {
       proofUrl = row.payment_proof_path;
     } else {
       proofUrl = `${publicUrlBase}/storage/v1/object/public/payment-proofs/${row.payment_proof_path}`;
@@ -344,20 +348,41 @@ export const useUploadPaymentProof = ({
         throw new Error('Sesi Anda telah berakhir, silakan masuk kembali');
       }
 
-      const fileExt = file.name.split('.').pop() || 'jpg';
-      const storagePath = `${user.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${fileExt}`;
+      // 1. Kompres gambar ke format JPEG Base64 ringan (~50-100 KB)
+      let payloadPath = '';
+      try {
+        payloadPath = await compressImageToBase64(file, 1024, 1024, 0.75);
+      } catch (err) {
+        console.warn('Gagal kompresi canvas:', err);
+      }
 
-      const { error: uploadError } = await supabase.storage
-        .from('payment-proofs')
-        .upload(storagePath, file, { upsert: true });
+      // 2. Jika kompresi canvas tidak didukung, fallback ke Supabase Storage
+      if (!payloadPath) {
+        const fileExt = file.name.split('.').pop() || 'jpg';
+        const storagePath = `${user.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${fileExt}`;
 
-      if (uploadError) {
-        throw new Error(`Gagal mengunggah bukti bayar: ${uploadError.message}`);
+        const { error: uploadError } = await supabase.storage
+          .from('payment-proofs')
+          .upload(storagePath, file, { upsert: true });
+
+        if (uploadError) {
+          throw new Error(`Gagal mengunggah bukti bayar: ${uploadError.message}`);
+        }
+        payloadPath = storagePath;
+      } else {
+        // Coba upload file ke storage bucket sebagai backup jika aktif
+        try {
+          const fileExt = 'jpg';
+          const storagePath = `${user.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${fileExt}`;
+          await supabase.storage.from('payment-proofs').upload(storagePath, file, { upsert: true });
+        } catch {
+          // Abaikan error storage karena Base64 sudah ada
+        }
       }
 
       const { error: rpcError } = await supabase.rpc('submit_payment_proof', {
         p_appointment_id: id,
-        p_path: storagePath,
+        p_path: payloadPath,
       });
 
       if (rpcError) {

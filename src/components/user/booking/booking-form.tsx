@@ -9,6 +9,7 @@ import { useGetDoctors } from '@/hooks/api/use-doctors';
 import { card, errorText, inputBase, primaryBtn, secondaryBtn } from '@/lib/styles';
 import { formatDate } from '@/lib/format';
 import { isSpecialistForCategory, type Category } from '@/constants/treatments';
+import { formatPracticeDays } from '@/lib/schedule';
 import { getBookableDates } from './utils';
 
 type Props = {
@@ -63,9 +64,10 @@ export default function BookingForm({ treatment }: Props) {
       } else if (
         (status === 422 && lower.includes('started')) ||
         lower.includes('sudah dimulai') ||
-        lower.includes('sudah lewat')
+        lower.includes('sudah lewat') ||
+        lower.includes('sudah selesai')
       ) {
-        setErrors({ slot: 'Jadwal ini sudah dimulai atau lewat. Silakan pilih jadwal lain.' });
+        setErrors({ slot: 'Jadwal ini sudah selesai atau lewat. Silakan pilih jadwal lain.' });
         setStartTime('');
         availability.refetch();
       } else if (lower.includes('tidak tersedia') || lower.includes('tidak sesuai')) {
@@ -106,6 +108,8 @@ export default function BookingForm({ treatment }: Props) {
 
   const describedBy = (field: keyof Errors) => (errors[field] ? `booking-${field}-error` : undefined);
 
+  const practiceDays = formatPracticeDays(selectedDoctor?.doctor_schedules ?? []);
+
   // Pilihan jadwal: belum pilih dokter → loading → error → kosong → daftar jadwal
   let slotContent;
   if (!doctorId) {
@@ -137,16 +141,31 @@ export default function BookingForm({ treatment }: Props) {
     );
   } else if (slots.length === 0) {
     slotContent = (
-      <p className="mt-3 rounded-xl bg-neutral-100 px-4 py-3 text-neutral-700">
-        Dokter tidak praktik di tanggal ini. Silakan pilih tanggal lain.
-      </p>
+      <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-950">
+        <p className="font-semibold">Dokter tidak praktik pada tanggal ini.</p>
+        {practiceDays ? (
+          <p className="mt-1 text-sm">
+            Jadwal praktik <strong>{selectedDoctor?.full_name}</strong> adalah hari{' '}
+            <strong className="underline">{practiceDays}</strong>. Silakan pilih tanggal yang sesuai pada pilihan tanggal di atas.
+          </p>
+        ) : (
+          <p className="mt-1 text-sm">Silakan pilih tanggal lain atau dokter lain.</p>
+        )}
+      </div>
     );
   } else {
+    const allSlotsPassed = slots.length > 0 && slots.every((s) => !s.available && s.remaining > 0);
     slotContent = (
-      <div
-        aria-busy={availability.isFetching}
-        className="mt-3 grid gap-3 sm:grid-cols-2"
-      >
+      <div className="mt-3">
+        {allSlotsPassed && (
+          <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+            Jadwal praktik dokter untuk hari ini sudah terlewat jam operasional ({slots.map((s) => `${s.start_time}–${s.end_time} WIB`).join(', ')}). Silakan pilih tanggal berikutnya (misal besok atau hari praktik berikutnya).
+          </div>
+        )}
+        <div
+          aria-busy={availability.isFetching}
+          className="grid gap-3 sm:grid-cols-2"
+        >
         {slots.map((slot) => {
           const id = `booking-slot-${slot.start_time}`;
           const checked = startTime === slot.start_time;
@@ -195,6 +214,7 @@ export default function BookingForm({ treatment }: Props) {
             </label>
           );
         })}
+        </div>
       </div>
     );
   }
@@ -267,10 +287,17 @@ export default function BookingForm({ treatment }: Props) {
             </p>
           )}
           {selectedDoctor && (
-            <p className="mt-2 text-sm text-neutral-600">
-              {selectedDoctor.experience_years} tahun pengalaman · Biaya konsultasi{' '}
-              {formatRupiah(selectedDoctor.consultation_fee)}
-            </p>
+            <div className="mt-2 text-sm text-neutral-600">
+              <p>
+                {selectedDoctor.experience_years} tahun pengalaman · Biaya konsultasi{' '}
+                {formatRupiah(selectedDoctor.consultation_fee)}
+              </p>
+              {practiceDays && (
+                <p className="mt-0.5 text-neutral-500">
+                  Hari praktik: <span className="font-semibold text-[#1B1B7A]">{practiceDays}</span>
+                </p>
+              )}
+            </div>
           )}
         </div>
 
@@ -291,12 +318,21 @@ export default function BookingForm({ treatment }: Props) {
             }}
             className={`mt-2 ${inputBase} ${errors.date ? 'border-red-600' : 'border-neutral-300'}`}
           >
-            {dates.map((date, index) => (
-              <option key={date} value={date}>
-                {formatDate(date)}
-                {index === 0 ? ' (hari ini)' : ''}
-              </option>
-            ))}
+            {dates.map((d, index) => {
+              const [y, m, dayNum] = d.split('-').map(Number);
+              const dow = new Date(y, m - 1, dayNum).getDay();
+              const isPracticing = selectedDoctor
+                ? (selectedDoctor.doctor_schedules ?? []).some((s) => s.day_of_week === dow)
+                : true;
+
+              return (
+                <option key={d} value={d}>
+                  {formatDate(d)}
+                  {index === 0 ? ' (hari ini)' : ''}
+                  {selectedDoctor && !isPracticing ? ' · (Dokter Libur)' : ''}
+                </option>
+              );
+            })}
           </select>
           {errors.date && (
             <p id="booking-date-error" role="alert" className={errorText}>
