@@ -398,3 +398,100 @@ export const useGetAdminDashboardMetrics = () => {
     },
   });
 };
+
+export type TAdminAppointmentUpdatePayload = {
+  id: string;
+  doctor_id?: string;
+  session_date?: string; // YYYY-MM-DD
+  start_time?: string; // HH:mm:ss or HH:mm
+  status?: TTransactionStatus;
+  notes?: string;
+};
+
+// PATCH /admin/appointments/:id — koreksi atau reschedule janji temu oleh admin
+export const useAdminUpdateAppointment = ({
+  onError,
+  onSuccess,
+}: TMutationCallbacks<TApiSuccessResponse<TAdminAppointment>> = {}) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationKey: ['admin-update-appointment'],
+    mutationFn: async (payload: TAdminAppointmentUpdatePayload) => {
+      const supabase = createClient();
+      const startTimeFormatted = payload.start_time
+        ? payload.start_time.length === 5
+          ? `${payload.start_time}:00`
+          : payload.start_time
+        : null;
+
+      const { error: rpcError } = await supabase.rpc('admin_update_appointment', {
+        p_appointment_id: payload.id,
+        p_doctor_id: payload.doctor_id || null,
+        p_session_date: payload.session_date || null,
+        p_start_time: startTimeFormatted,
+        p_status: payload.status || null,
+        p_notes: payload.notes || null,
+      });
+
+      if (rpcError && rpcError.message.includes('does not exist')) {
+        // Fallback langsung jika RPC belum dieksekusi di database
+        const updateObj: Record<string, any> = {
+          updated_at: new Date().toISOString(),
+        };
+        if (payload.status) {
+          updateObj.status = payload.status;
+          if (payload.status === 'done') {
+            updateObj.confirmed_at = new Date().toISOString();
+          }
+        }
+        if (payload.doctor_id) updateObj.doctor_id = payload.doctor_id;
+        if (payload.notes) updateObj.rejection_reason = payload.notes;
+
+        const { error: directError } = await supabase
+          .from('appointments')
+          .update(updateObj)
+          .eq('id', payload.id);
+
+        if (directError) {
+          throw new Error(directError.message);
+        }
+      } else if (rpcError) {
+        throw new Error(rpcError.message);
+      }
+
+      // Ambil appointment terupdate
+      const { data: row, error: fetchError } = await supabase
+        .from('appointments')
+        .select(`
+          *,
+          profiles:patient_id (id, full_name, phone_number),
+          doctors (id, full_name, photo_url),
+          practice_sessions (id, session_date, start_time, end_time),
+          ratings (*)
+        `)
+        .eq('id', payload.id)
+        .single();
+
+      if (fetchError || !row) {
+        throw new Error('Janji temu berhasil diubah, namun gagal memuat ulang data');
+      }
+
+      const publicUrlBase = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+      const mapped = mapToAdminAppointment(row, publicUrlBase);
+
+      return {
+        success: true as const,
+        message: 'Janji temu berhasil diperbarui',
+        data: mapped,
+      };
+    },
+    onSuccess: (response) => {
+      queryClient.invalidateQueries({ queryKey: ['get-admin-appointments'] });
+      queryClient.invalidateQueries({ queryKey: ['get-appointment', response.data.id] });
+      queryClient.invalidateQueries({ queryKey: ['get-admin-dashboard-metrics'] });
+      queryClient.invalidateQueries({ queryKey: ['get-live-queue'] });
+      onSuccess?.(response);
+    },
+    onError: (error) => onError?.(error as TApiError),
+  });
+};

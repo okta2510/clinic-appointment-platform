@@ -7,6 +7,7 @@ import {
   Clock,
   Eye,
   FileText,
+  Pencil,
   Search,
   XCircle,
 } from 'lucide-react';
@@ -19,6 +20,7 @@ import { useGetDoctors } from '@/hooks/api/use-doctors';
 import { STATUS_META } from '@/constants/transaction-status';
 import { formatDate, formatRupiah, formatTime } from '@/lib/format';
 import Modal from '@/components/ui/modal';
+import EditAppointmentModal from './edit-appointment-modal';
 import { Pagination } from '@/components/ui/pagination';
 import { inputBase, secondaryBtn } from '@/components/admin/styles';
 import type { TAdminAppointment, TTransactionStatus } from '@/types/appointment';
@@ -35,6 +37,7 @@ export default function AppointmentManagement() {
 
   // Modal states
   const [previewAppt, setPreviewAppt] = useState<TAdminAppointment | null>(null);
+  const [editTarget, setEditTarget] = useState<TAdminAppointment | null>(null);
   const [approveTarget, setApproveTarget] = useState<TAdminAppointment | null>(null);
   const [rejectTarget, setRejectTarget] = useState<TAdminAppointment | null>(null);
   const [rejectReason, setRejectReason] = useState('');
@@ -324,6 +327,16 @@ export default function AppointmentManagement() {
                             Detail
                           </button>
 
+                          <button
+                            type="button"
+                            onClick={() => setEditTarget(appt)}
+                            aria-label={`Ubah janji ${appt.appointment_code}`}
+                            className="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                            Ubah
+                          </button>
+
                           {appt.status === 'waiting_confirmation' && (
                             <>
                               <button
@@ -439,7 +452,19 @@ export default function AppointmentManagement() {
               )}
             </div>
 
-            <div className="mt-6 flex justify-end">
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  const target = previewAppt;
+                  setPreviewAppt(null);
+                  setEditTarget(target);
+                }}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-blue-300 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100"
+              >
+                <Pencil className="h-4 w-4" />
+                Ubah Janji Temu
+              </button>
               <button
                 type="button"
                 onClick={() => setPreviewAppt(null)}
@@ -450,6 +475,20 @@ export default function AppointmentManagement() {
             </div>
           </div>
         </Modal>
+      )}
+
+      {/* EDIT / RESCHEDULE MODAL */}
+      {editTarget && (
+        <EditAppointmentModal
+          appointment={editTarget}
+          doctors={doctorsList}
+          onClose={() => setEditTarget(null)}
+          onSuccess={(msg) => {
+            setActionSuccessMsg(msg);
+            setTimeout(() => setActionSuccessMsg(''), 4000);
+            refetch();
+          }}
+        />
       )}
 
       {/* APPROVE CONFIRMATION MODAL */}

@@ -153,34 +153,104 @@ begin
 end;
 $$;
 
-create or replace function public.approve_appointment(p_appointment_id uuid)
+-- 5. admin_update_appointment: koreksi status, jadwal, dokter, atau catatan janji temu oleh admin
+create or replace function public.admin_update_appointment(
+  p_appointment_id uuid,
+  p_doctor_id      uuid default null,
+  p_session_date   date default null,
+  p_start_time     time default null,
+  p_status         public.transaction_status default null,
+  p_notes          text default null
+)
 returns public.appointments
 language plpgsql
 security definer
 set search_path = public, pg_temp
 as $$
 declare
+  v_appt public.appointments;
+  v_target_doctor_id uuid;
+  v_target_session_id uuid;
+  v_schedule public.doctor_schedules;
   v_result public.appointments;
 begin
   if not public.is_admin() then
-    raise exception 'Hanya admin yang dapat mengonfirmasi janji temu';
+    raise exception 'Hanya admin yang dapat mengubah janji temu';
   end if;
 
-  update public.appointments a
-  set status = 'done',
-      qr_token = gen_random_uuid(),
-      confirmed_at = now()
-  from public.practice_sessions s
-  where a.id = p_appointment_id
-    and s.id = a.session_id
-    and a.status = 'waiting_confirmation'
-    and s.ends_at > now()
-  returning a.* into v_result;
-
+  select * into v_appt from public.appointments where id = p_appointment_id for update;
   if not found then
-    raise exception 'Janji tidak bisa dikonfirmasi (status salah atau sesi sudah selesai)';
+    raise exception 'Janji temu tidak ditemukan';
+  end if;
+
+  v_target_doctor_id := coalesce(p_doctor_id, v_appt.doctor_id);
+  v_target_session_id := v_appt.session_id;
+
+  -- Jika admin mengubah tanggal, dokter, atau jam praktik (reschedule):
+  if p_session_date is not null and p_start_time is not null then
+    select * into v_schedule
+    from public.doctor_schedules
+    where doctor_id = v_target_doctor_id
+      and day_of_week = extract(dow from p_session_date)
+      and start_time = p_start_time
+      and is_active
+    limit 1;
+
+    if not found then
+      select * into v_schedule
+      from public.doctor_schedules
+      where doctor_id = v_target_doctor_id
+        and is_active
+      limit 1;
+    end if;
+
+    if v_schedule.id is not null then
+      insert into public.practice_sessions (
+        doctor_id, schedule_id, session_date, start_time, end_time, starts_at, ends_at, patient_quota
+      ) values (
+        v_target_doctor_id, v_schedule.id, p_session_date, p_start_time,
+        coalesce(v_schedule.end_time, (p_start_time + interval '1 hour')::time),
+        (p_session_date + p_start_time) at time zone 'Asia/Jakarta',
+        (p_session_date + coalesce(v_schedule.end_time, (p_start_time + interval '1 hour')::time)) at time zone 'Asia/Jakarta',
+        coalesce(v_schedule.patient_quota, 10)
+      )
+      on conflict (doctor_id, session_date, start_time) do nothing;
+
+      select id into v_target_session_id
+      from public.practice_sessions
+      where doctor_id = v_target_doctor_id
+        and session_date = p_session_date
+        and start_time = p_start_time;
+    end if;
+  end if;
+
+  update public.appointments
+  set doctor_id = v_target_doctor_id,
+      session_id = coalesce(v_target_session_id, session_id),
+      status = coalesce(p_status, status),
+      rejection_reason = case
+        when p_notes is not null then p_notes
+        else rejection_reason
+      end,
+      qr_token = case
+        when coalesce(p_status, status) = 'done' and qr_token is null then gen_random_uuid()
+        when coalesce(p_status, status) <> 'done' then null
+        else qr_token
+      end,
+      confirmed_at = case
+        when coalesce(p_status, status) = 'done' and confirmed_at is null then now()
+        else confirmed_at
+      end,
+      updated_at = now()
+  where id = p_appointment_id
+  returning * into v_result;
+
+  if v_target_session_id is not null and v_target_session_id <> v_appt.session_id then
+    perform public.renumber_bookings(v_appt.session_id);
+    perform public.renumber_bookings(v_target_session_id);
   end if;
 
   return v_result;
 end;
 $$;
+
