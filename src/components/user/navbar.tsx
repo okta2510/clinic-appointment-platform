@@ -12,6 +12,7 @@ const links = [
   { href: '/', label: 'Beranda' },
   { href: '/treatment', label: 'Treatment' },
   { href: '/doctor', label: 'Our Doctor' },
+  { href: '/queue', label: 'Live Antrean' },
 ];
 
 // Belum login → tombol "Masuk" ke /login

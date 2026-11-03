@@ -1,5 +1,5 @@
-import ComingSoon from '@/components/admin/coming-soon';
+import QueueManagement from '@/components/admin/queue/queue-management';
 
 export default function QueueManagementPage() {
-  return <ComingSoon title="Manajemen Antrean" />;
+  return <QueueManagement />;
 }
