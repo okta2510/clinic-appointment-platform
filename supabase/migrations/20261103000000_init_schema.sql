@@ -865,6 +865,35 @@ revoke execute on function public.handle_new_user()              from public, an
 -- -----------------------------------------------------------------------------
 -- 9. ROW LEVEL SECURITY
 -- -----------------------------------------------------------------------------
+
+-- Jaring Pengaman Otomatis (Event Trigger):
+-- Setiap kali ada tabel baru dibuat di schema 'public', RLS otomatis aktif.
+-- Mencegah developer baru lupa menulis 'ENABLE ROW LEVEL SECURITY'.
+create or replace function public.rls_auto_enable()
+returns event_trigger
+language plpgsql
+security definer
+set search_path = pg_catalog
+as $$
+declare
+  cmd record;
+begin
+  for cmd in
+    select *
+    from pg_event_trigger_ddl_commands()
+    where command_tag in ('CREATE TABLE', 'CREATE TABLE AS', 'SELECT INTO')
+      and schema_name = 'public'
+  loop
+    execute format('alter table %s enable row level security;', cmd.object_identity);
+  end loop;
+end;
+$$;
+
+create event trigger ensure_rls
+on ddl_command_end
+when tag in ('CREATE TABLE', 'CREATE TABLE AS', 'SELECT INTO')
+execute function public.rls_auto_enable();
+
 alter table public.profiles          enable row level security;
 alter table public.specialists       enable row level security;
 alter table public.doctors           enable row level security;
