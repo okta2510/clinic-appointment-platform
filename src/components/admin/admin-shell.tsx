@@ -1,6 +1,6 @@
 'use client';
 
-import { CircleUserRound, Menu, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { CircleUserRound, Menu, PanelLeftClose, PanelLeftOpen, RotateCw } from 'lucide-react';
 import { useState } from 'react';
 import { useEscapeKey } from '@/hooks/use-escape-key';
 import { useLockBodyScroll } from '@/hooks/use-lock-body-scroll';
@@ -73,10 +73,21 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
           )}
         </button>
 
-        {/* TODO: ganti dengan nama admin yang sedang login */}
         <div className="flex items-center gap-2 text-neutral-800">
-          <CircleUserRound aria-hidden="true" className="h-6 w-6 text-[#1B1B7A]" />
-          <span className="font-medium">Admin</span>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            title="Muat ulang halaman (Reload Page)"
+            aria-label="Muat ulang halaman"
+            className={`${iconBtn} text-neutral-600 hover:text-[#1B1B7A]`}
+          >
+            <RotateCw aria-hidden="true" className="h-4 w-4" />
+          </button>
+          <div className="hidden h-5 w-px bg-neutral-200 sm:block" />
+          <div className="flex items-center gap-2">
+            <CircleUserRound aria-hidden="true" className="h-6 w-6 text-[#1B1B7A]" />
+            <span className="font-medium">Admin</span>
+          </div>
         </div>
       </header>
 

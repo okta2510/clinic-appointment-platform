@@ -6,6 +6,7 @@ import {
   Clock,
   ExternalLink,
   QrCode,
+  RotateCw,
   TrendingUp,
   Users,
   Wallet,
@@ -40,14 +41,26 @@ export default function AdminDashboard() {
           </p>
         </div>
 
-        <Link
-          href="/queue"
-          target="_blank"
-          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-[#1B1B7A] px-5 py-2.5 font-bold text-white shadow-sm transition hover:bg-[#12125c]"
-        >
-          <ExternalLink className="h-4 w-4" />
-          Buka Display TV Antrean
-        </Link>
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            title="Muat ulang halaman dashboard"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-neutral-300 bg-white px-4 py-2.5 font-semibold text-neutral-700 shadow-xs transition hover:bg-neutral-50 active:scale-95"
+          >
+            <RotateCw className="h-4 w-4 text-[#1B1B7A]" />
+            Reload Page
+          </button>
+
+          <Link
+            href="/queue"
+            target="_blank"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-[#1B1B7A] px-5 py-2.5 font-bold text-white shadow-sm transition hover:bg-[#12125c]"
+          >
+            <ExternalLink className="h-4 w-4" />
+            Buka Display TV Antrean
+          </Link>
+        </div>
       </div>
 
       {/* 4 Kartu Metrik KPI */}
