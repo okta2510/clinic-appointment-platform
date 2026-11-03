@@ -1,5 +1,5 @@
-import ComingSoon from '@/components/admin/coming-soon';
+import AdminStatistic from '@/components/admin/statistic/admin-statistic';
 
 export default function StatisticPage() {
-  return <ComingSoon title="Statistik" />;
+  return <AdminStatistic />;
 }

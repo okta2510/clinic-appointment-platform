@@ -1,5 +1,5 @@
-import ComingSoon from '@/components/admin/coming-soon';
+import AdminDashboard from '@/components/admin/dashboard/admin-dashboard';
 
 export default function DashboardPage() {
-  return <ComingSoon title="Dashboard" />;
+  return <AdminDashboard />;
 }

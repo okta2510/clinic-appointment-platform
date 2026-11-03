@@ -1,5 +1,5 @@
-import ComingSoon from '@/components/admin/coming-soon';
+import AppointmentManagement from '@/components/admin/appointment/appointment-management';
 
 export default function AppointmentManagementPage() {
-  return <ComingSoon title="Manajemen Janji Temu" />;
+  return <AppointmentManagement />;
 }

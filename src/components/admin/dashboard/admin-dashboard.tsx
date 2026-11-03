@@ -1,0 +1,262 @@
+'use client';
+
+import {
+  CalendarCheck,
+  CheckCircle2,
+  Clock,
+  ExternalLink,
+  QrCode,
+  TrendingUp,
+  Users,
+  Wallet,
+} from 'lucide-react';
+import Link from 'next/link';
+import {
+  useGetAdminAppointments,
+  useGetAdminDashboardMetrics,
+  useGetLiveQueue,
+} from '@/hooks/api/use-admin-appointments';
+import { formatRupiah } from '@/lib/format';
+import { STATUS_META } from '@/constants/transaction-status';
+
+export default function AdminDashboard() {
+  const { data: metrics, isLoading: metricsLoading } = useGetAdminDashboardMetrics();
+  const { data: liveQueue, isLoading: queueLoading } = useGetLiveQueue();
+  const { data: pendingPayments } = useGetAdminAppointments({
+    status: 'waiting_confirmation',
+    limit: 5,
+  });
+
+  return (
+    <div className="space-y-8">
+      {/* Header */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-3xl font-extrabold tracking-tight text-[#1B1B7A]">
+            Dashboard Operasional
+          </h1>
+          <p className="mt-1 text-neutral-600">
+            Ringkasan aktivitas janji temu, antrean klinik, dan pembayaran hari ini.
+          </p>
+        </div>
+
+        <Link
+          href="/queue"
+          target="_blank"
+          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-[#1B1B7A] px-5 py-2.5 font-bold text-white shadow-sm transition hover:bg-[#12125c]"
+        >
+          <ExternalLink className="h-4 w-4" />
+          Buka Display TV Antrean
+        </Link>
+      </div>
+
+      {/* 4 Kartu Metrik KPI */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {/* Metrik 1: Janji Hari Ini */}
+        <div className="rounded-3xl border border-neutral-200 bg-white p-6 shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-semibold text-neutral-500">Janji Hari Ini</span>
+            <div className="rounded-2xl bg-blue-50 p-3 text-blue-800">
+              <CalendarCheck className="h-6 w-6" />
+            </div>
+          </div>
+          <p className="mt-4 text-3xl font-extrabold text-neutral-900">
+            {metricsLoading ? '...' : metrics?.todayCount || 0}
+          </p>
+          <p className="mt-1 text-xs text-neutral-500">Reservasi terdaftar</p>
+        </div>
+
+        {/* Metrik 2: Menunggu Konfirmasi */}
+        <div className="rounded-3xl border border-neutral-200 bg-white p-6 shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-semibold text-neutral-500">Verifikasi Pembayaran</span>
+            <div className="rounded-2xl bg-amber-50 p-3 text-amber-800">
+              <Clock className="h-6 w-6" />
+            </div>
+          </div>
+          <p className="mt-4 text-3xl font-extrabold text-amber-900">
+            {metricsLoading ? '...' : metrics?.pendingCount || 0}
+          </p>
+          <Link
+            href="/admin/payment"
+            className="mt-1 inline-block text-xs font-semibold text-[#1B1B7A] underline decoration-[#F29A9A]"
+          >
+            Lihat antrean bukti bayar &rarr;
+          </Link>
+        </div>
+
+        {/* Metrik 3: Selesai Dilayani */}
+        <div className="rounded-3xl border border-neutral-200 bg-white p-6 shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-semibold text-neutral-500">Terkonfirmasi</span>
+            <div className="rounded-2xl bg-green-50 p-3 text-green-800">
+              <CheckCircle2 className="h-6 w-6" />
+            </div>
+          </div>
+          <p className="mt-4 text-3xl font-extrabold text-green-900">
+            {metricsLoading ? '...' : metrics?.doneCount || 0}
+          </p>
+          <p className="mt-1 text-xs text-neutral-500">Status done / terbit QR</p>
+        </div>
+
+        {/* Metrik 4: Estimasi Omzet */}
+        <div className="rounded-3xl border border-neutral-200 bg-white p-6 shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-semibold text-neutral-500">Total Pendapatan</span>
+            <div className="rounded-2xl bg-indigo-50 p-3 text-[#1B1B7A]">
+              <Wallet className="h-6 w-6" />
+            </div>
+          </div>
+          <p className="mt-4 text-2xl font-extrabold text-[#1B1B7A]">
+            {metricsLoading ? '...' : formatRupiah(metrics?.totalRevenue || 0)}
+          </p>
+          <Link
+            href="/admin/statistic"
+            className="mt-1 inline-block text-xs font-semibold text-[#1B1B7A] underline decoration-[#F29A9A]"
+          >
+            Grafik laporan lengkap &rarr;
+          </Link>
+        </div>
+      </div>
+
+      {/* Grid: Antrean Live Hari Ini & Verifikasi Pembayaran Terbaru */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        {/* Antrean Sesi Hari Ini */}
+        <div className="rounded-3xl border border-neutral-200 bg-white p-6 shadow-xs">
+          <div className="flex items-center justify-between border-b border-neutral-100 pb-4">
+            <div className="flex items-center gap-2">
+              <Users className="h-5 w-5 text-[#1B1B7A]" />
+              <h2 className="font-bold text-neutral-900">Sesi Praktik & Antrean Hari Ini</h2>
+            </div>
+            <Link
+              href="/admin/queueManagement"
+              className="text-sm font-bold text-[#1B1B7A] hover:underline"
+            >
+              Scan & Panggil &rarr;
+            </Link>
+          </div>
+
+          <div className="mt-4 space-y-3">
+            {queueLoading ? (
+              <p className="py-6 text-center text-sm text-neutral-500">Memuat data sesi...</p>
+            ) : !liveQueue || liveQueue.length === 0 ? (
+              <p className="py-6 text-center text-sm text-neutral-500">
+                Belum ada sesi dokter yang aktif untuk hari ini.
+              </p>
+            ) : (
+              liveQueue.map((item: any) => (
+                <div
+                  key={item.session_id}
+                  className="flex items-center justify-between rounded-2xl border border-neutral-100 bg-neutral-50 p-4"
+                >
+                  <div>
+                    <p className="font-bold text-neutral-900">{item.doctor_name}</p>
+                    <p className="text-xs text-neutral-500">
+                      {item.specialist_name} &bull; {item.start_time?.slice(0, 5)} -{' '}
+                      {item.end_time?.slice(0, 5)} WIB
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-xs font-medium text-neutral-500">Sedang Melayani:</span>
+                    <p className="text-2xl font-black text-[#1B1B7A]">
+                      #{item.current_queue_number || '-'}
+                    </p>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* Verifikasi Pembayaran Menunggu Konfirmasi */}
+        <div className="rounded-3xl border border-neutral-200 bg-white p-6 shadow-xs">
+          <div className="flex items-center justify-between border-b border-neutral-100 pb-4">
+            <div className="flex items-center gap-2">
+              <Wallet className="h-5 w-5 text-amber-700" />
+              <h2 className="font-bold text-neutral-900">Menunggu Verifikasi Pembayaran</h2>
+            </div>
+            <Link
+              href="/admin/payment"
+              className="text-sm font-bold text-[#1B1B7A] hover:underline"
+            >
+              Kelola Semua &rarr;
+            </Link>
+          </div>
+
+          <div className="mt-4 space-y-3">
+            {!pendingPayments?.data || pendingPayments.data.length === 0 ? (
+              <p className="py-6 text-center text-sm text-neutral-500">
+                Semua pembayaran telah diverifikasi. Tidak ada antrean baru.
+              </p>
+            ) : (
+              pendingPayments.data.map((appt) => (
+                <div
+                  key={appt.id}
+                  className="flex items-center justify-between rounded-2xl border border-amber-100 bg-amber-50/50 p-4"
+                >
+                  <div>
+                    <p className="font-bold text-neutral-900">
+                      {appt.patient_profiles.users.full_name}
+                    </p>
+                    <p className="text-xs text-neutral-600">
+                      Dokter: {appt.doctors.full_name} &bull; {formatRupiah(appt.total_amount)}
+                    </p>
+                  </div>
+                  <Link
+                    href="/admin/payment"
+                    className="rounded-xl bg-amber-600 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-amber-700"
+                  >
+                    Periksa
+                  </Link>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Pintasan Aksi Cepat */}
+      <div className="rounded-3xl border border-neutral-200 bg-white p-6 shadow-xs">
+        <h2 className="font-bold text-neutral-900">Aksi Cepat Operasional</h2>
+        <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <Link
+            href="/admin/queueManagement"
+            className="flex flex-col items-center justify-center rounded-2xl border border-neutral-200 p-4 text-center transition hover:border-[#1B1B7A] hover:bg-blue-50/40"
+          >
+            <QrCode className="h-7 w-7 text-[#1B1B7A]" />
+            <span className="mt-2 text-sm font-bold text-neutral-900">Scan QR Check-In</span>
+            <span className="text-xs text-neutral-500">Konfirmasi kedatangan</span>
+          </Link>
+
+          <Link
+            href="/admin/payment"
+            className="flex flex-col items-center justify-center rounded-2xl border border-neutral-200 p-4 text-center transition hover:border-[#1B1B7A] hover:bg-blue-50/40"
+          >
+            <Wallet className="h-7 w-7 text-amber-700" />
+            <span className="mt-2 text-sm font-bold text-neutral-900">Review Transfer</span>
+            <span className="text-xs text-neutral-500">Terima / Tolak bukti</span>
+          </Link>
+
+          <Link
+            href="/admin/appointmentManagement"
+            className="flex flex-col items-center justify-center rounded-2xl border border-neutral-200 p-4 text-center transition hover:border-[#1B1B7A] hover:bg-blue-50/40"
+          >
+            <CalendarCheck className="h-7 w-7 text-green-700" />
+            <span className="mt-2 text-sm font-bold text-neutral-900">Daftar Janji Sesi</span>
+            <span className="text-xs text-neutral-500">Jadwal & nomor antrean</span>
+          </Link>
+
+          <Link
+            href="/admin/statistic"
+            className="flex flex-col items-center justify-center rounded-2xl border border-neutral-200 p-4 text-center transition hover:border-[#1B1B7A] hover:bg-blue-50/40"
+          >
+            <TrendingUp className="h-7 w-7 text-indigo-700" />
+            <span className="mt-2 text-sm font-bold text-neutral-900">Statistik Klinik</span>
+            <span className="text-xs text-neutral-500">Laporan omzet & grafik</span>
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+

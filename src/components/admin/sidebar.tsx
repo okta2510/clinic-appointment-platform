@@ -16,7 +16,8 @@ import {
   X,
 } from 'lucide-react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
+import { useLogout } from '@/hooks/api/use-auth';
 
 type NavItem = { href: string; label: string; icon: LucideIcon };
 
@@ -34,6 +35,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
       { href: '/admin/appointmentManagement', label: 'Janji Temu', icon: CalendarCheck },
       { href: '/admin/queueManagement', label: 'Antrean', icon: ListOrdered },
       { href: '/admin/payment', label: 'Pembayaran', icon: Wallet },
+      { href: '/queue', label: 'Layar TV Antrean', icon: ExternalLink },
     ],
   },
   {
@@ -65,6 +67,12 @@ type Props = {
 
 export default function Sidebar({ collapsed, mobileOpen, onCloseMobile }: Props) {
   const pathname = usePathname();
+  const router = useRouter();
+  const { mutate: logout, isPending: isLoggingOut } = useLogout({
+    onSuccess: () => {
+      router.push('/admin/login');
+    },
+  });
   // Label tetap terbaca screen reader saat sidebar diciutkan
   const labelClass = collapsed ? 'lg:sr-only' : '';
 
@@ -153,15 +161,16 @@ export default function Sidebar({ collapsed, mobileOpen, onCloseMobile }: Props)
           <ExternalLink aria-hidden="true" className="h-5 w-5 shrink-0" />
           <span className={labelClass}>Lihat situs</span>
         </Link>
-        {/* TODO: panggil API logout di sini sebelum redirect */}
-        <Link
-          href="/admin/login"
+        <button
+          type="button"
+          onClick={() => logout()}
+          disabled={isLoggingOut}
           title={collapsed ? 'Keluar' : undefined}
           className={`${itemBase} ${collapsed ? 'lg:justify-center' : ''}`}
         >
           <LogOut aria-hidden="true" className="h-5 w-5 shrink-0" />
-          <span className={labelClass}>Keluar</span>
-        </Link>
+          <span className={labelClass}>{isLoggingOut ? 'Keluar...' : 'Keluar'}</span>
+        </button>
       </div>
     </aside>
   );
