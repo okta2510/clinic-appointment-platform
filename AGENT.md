@@ -132,3 +132,23 @@ To keep evaluator and new user onboarding seamless:
 - **Types**: Prefixed with `T` (e.g., `TDoctor`, `TAppointment`, `TProfile`).
 - **Currency**: IDR only. Always format numbers using `formatRupiah()` from `src/lib/format.ts`.
 - **Feedback & Modals**: Every destructive or modifying action (delete doctor, reject payment, cancel booking, call next, mark no-show) must show a confirmation popup dialog using `src/components/ui/modal.tsx`.
+
+## 9. Documents
+
+- **BRIEF.md**: Original MVP assignment and score weight breakdown.
+- **PRD.md**: Product Requirements Document (Goals, Personas, Functional & Non-Functional Specs).
+- **PLAN.md**: Step-by-step phased execution roadmap from Phase 0 to Phase 9.
+- **TECH.md**: Deep technical architecture, end-to-end user journeys, database schemas, RPC functions, state machine.
+- **INT.md**: Step-by-step Supabase integration guide (Setup, Migrations, Seed, Next.js 16 clients, Storage).
+- **agent.md**: Coding rules, atomic design, responsive rules, restrictions, and conventions.
+- **README.md**: Repository onboarding, project setup, and quickstart commands.
+- dont put technical complexity in the README.md, keep it simple and concise for new developers.
+- technical complexity should be in TECH.md and INT.md, not README.md.
+- big picture architecture and design decisions should be in PRD.md
+- Application flow development base on PRD.md and BRIEF.md, will be written in PLAN.md, and implemented in TECH.md and INT.md.
+
+## 10. Testing
+- **Unit Tests**: Use `vitest` + `@testing-library/react` for unit testing. Focus on schema validation, countdown logic, status transitions, and filter logic.
+- ** Integration Tests**: Use `vitest` + `@testing-library/react` for integration testing.
+- makesure all page loaded
+- create simple test for each page, and make sure all page loaded without error

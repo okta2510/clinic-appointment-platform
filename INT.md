@@ -383,8 +383,66 @@ Untuk memudahkan pengujian alur, tersedia 2 akun demo pengujian yang dicantumkan
    update public.profiles set role = 'patient', full_name = 'Budi Pasien Demo', phone_number = '08123456789' where id = (select id from auth.users where email = 'pasien@klinik.test');
    ```
 
-### Opsi B (Otomatis via SQL)
-Script SQL di bagian bawah file `supabase/seed.sql` sudah otomatis menyiapkan kedua akun di atas jika Anda menjalankannya di SQL Editor.
+### Opsi B (Otomatis via SQL Script)
+Anda dapat menyalin script SQL dari file [`supabase/seed.sql`](./supabase/seed.sql) atau menjalankan blok kode berikut di SQL Editor:
+
+```sql
+create extension if not exists "pgcrypto";
+
+delete from auth.users where email in ('admin@klinik.test', 'pasien@klinik.test');
+
+do $$
+declare
+  v_admin_id uuid := 'aaaaaaaa-1111-1111-1111-aaaaaaaaaaaa';
+  v_patient_id uuid := 'bbbbbbbb-2222-2222-2222-bbbbbbbbbbbb';
+begin
+  -- Buat User Admin Demo
+  insert into auth.users (
+    instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
+    raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
+    confirmation_token, email_change, email_change_token_new, recovery_token
+  ) values (
+    '00000000-0000-0000-0000-000000000000', v_admin_id, 'authenticated', 'authenticated',
+    'admin@klinik.test', crypt('Admin123!', gen_salt('bf')), now(),
+    '{"provider":"email","providers":["email"]}'::jsonb,
+    '{"full_name":"Admin Utama Klinik"}'::jsonb, now(), now(),
+    '', '', '', ''
+  );
+
+  insert into auth.identities (
+    id, user_id, provider_id, identity_data, provider, last_sign_in_at, created_at, updated_at
+  ) values (
+    gen_random_uuid(), v_admin_id, v_admin_id::text,
+    format('{"sub":"%s","email":"admin@klinik.test"}', v_admin_id)::jsonb,
+    'email', now(), now(), now()
+  );
+
+  update public.profiles set role = 'admin', full_name = 'Admin Utama Klinik' where id = v_admin_id;
+
+  -- Buat User Pasien Demo
+  insert into auth.users (
+    instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
+    raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
+    confirmation_token, email_change, email_change_token_new, recovery_token
+  ) values (
+    '00000000-0000-0000-0000-000000000000', v_patient_id, 'authenticated', 'authenticated',
+    'pasien@klinik.test', crypt('Pasien123!', gen_salt('bf')), now(),
+    '{"provider":"email","providers":["email"]}'::jsonb,
+    '{"full_name":"Budi Pasien Demo","phone_number":"08123456789"}'::jsonb, now(), now(),
+    '', '', '', ''
+  );
+
+  insert into auth.identities (
+    id, user_id, provider_id, identity_data, provider, last_sign_in_at, created_at, updated_at
+  ) values (
+    gen_random_uuid(), v_patient_id, v_patient_id::text,
+    format('{"sub":"%s","email":"pasien@klinik.test"}', v_patient_id)::jsonb,
+    'email', now(), now(), now()
+  );
+
+  update public.profiles set role = 'patient', full_name = 'Budi Pasien Demo', phone_number = '08123456789' where id = v_patient_id;
+end $$;
+```
 
 ---
 

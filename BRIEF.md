@@ -37,14 +37,15 @@ The main goal of this MVP is to build a simple and functional appointment platfo
 - **Appointment History:** Patients can view their past appointments, including doctor name, practice session date, queue number, and consultation fee paid.
 - **Ratings:** Patients can leave a rating and review for a doctor only after the appointment has been completed.
 
-#### 4. Authentication and Authorization (2 point)
+### Feature 2
+#### 1. Authentication and Authorization (2 point)
 
 - **Account Creation:** Patients must create an account to book an appointment.
 - **Roles:** There are two roles: patient and admin (the clinic's single manager account).
 - **Role-Based Access:** Protect pages based on user roles (protected route).
 - **Profile:** Patients and admin can edit their profiles, including updating their profile picture, changing their password, and resetting their password if forgotten.
 
-#### 5. QR Check-In and Live Queue Number (4 point)
+#### 2. QR Check-In and Live Queue Number (4 point)
 
 - **On-Site Check-In:** On the day of the practice session, clinic staff scans the patient's QR code (via device camera) to mark the appointment as checked-in, confirming the patient has arrived.
 - **Check-In Window:** QR check-in is only valid on the appointment's practice session date; the system rejects check-in attempts outside that window.
@@ -53,7 +54,7 @@ The main goal of this MVP is to build a simple and functional appointment platfo
 - **Call Next Patient:** Admin/doctor's assistant can advance the current serving number for a practice session; only checked-in patients can be called.
 - **No-Show Handling:** If a patient has not checked in by the time their booking queue number is called or the session ends, admin can mark the appointment as a no-show.
 
-#### 6. Admin Dashboard (4 point)
+#### 3. Admin Dashboard (4 point)
 
 - **Dashboard Access:** Admin can view and manage all doctors (edit doctor data, practice schedule, etc.), appointments, and basic statistics.
 - **Statistics Visualization:** Display appointment data in graphical visualizations and reports by year, month, and day, including per-doctor statistics.
