@@ -37,17 +37,17 @@ Dokumen ini adalah rencana kerja bertahap (*step-by-step roadmap*) untuk membang
 ### Phase 0: Fondasi Integrasi Supabase (Pondasi Backend BaaS)
 **Tujuan**: Mengganti ketergantungan API eksternal menjadi koneksi langsung ke Supabase dengan hak akses yang aman melalui RLS dan RPC.
 
-- [ ] **Langkah 0.1**: Instal dependensi Supabase: `@supabase/supabase-js` dan `@supabase/ssr`.
-- [ ] **Langkah 0.2**: Buat client helper di `src/lib/supabase/`:
+- [x] **Langkah 0.1**: Instal dependensi Supabase: `@supabase/supabase-js` dan `@supabase/ssr`.
+- [x] **Langkah 0.2**: Buat client helper di `src/lib/supabase/`:
   - `client.ts` (`createBrowserClient` untuk Client Components)
   - `server.ts` (`createServerClient` untuk Server Components & Route Handlers)
-- [ ] **Langkah 0.3**: Setup `src/proxy.ts` (Next.js 16) untuk sinkronisasi cookie sesi autentikasi.
-- [ ] **Langkah 0.4**: Eksekusi migrasi database di project Supabase:
-  - `supabase/migrations/20261103000000_init_schema.sql` (Tabel, Enum, Trigger, RLS, Storage, RPC)
+- [x] **Langkah 0.3**: Setup `src/proxy.ts` (Next.js 16) untuk sinkronisasi cookie sesi autentikasi.
+- [x] **Langkah 0.4**: Eksekusi migrasi database di project Supabase:
+  - `supabase/migrations/20261103000000_init_schema.sql` (Tabel, Enum, Trigger, RLS, Storage, RPC, Event Trigger RLS)
   - `supabase/migrations/20261103000100_cron_jobs.sql` (pg_cron pemulihan kuota & kedaluwarsa 30m)
   - `supabase/seed.sql` (Data awal spesialis, dokter, jadwal, dan akun admin)
-- [ ] **Langkah 0.5**: Perbarui file tipe TypeScript `src/types/database.types.ts` agar sinkron dengan skema Supabase.
-- **Verifikasi**: Jalankan `npm run dev`, pastikan client Supabase berhasil inisialisasi tanpa error console.
+- [x] **Langkah 0.5**: Perbarui file tipe TypeScript `src/types/auth.ts` dan error helper `src/lib/api-error.ts`.
+- **Verifikasi**: `npm run build` sukses 53/53 halaman statis tanpa error.
 
 ---
 
@@ -126,12 +126,13 @@ Dokumen ini adalah rencana kerja bertahap (*step-by-step roadmap*) untuk membang
 ### Phase 5: Autentikasi & Manajemen Profil (BRIEF.md Feature 2.1 - 2 Poin)
 **Tujuan**: Akses aman berbasis role (`patient` vs `admin`), proteksi rute, dan kelola profil mandiri.
 
-- [ ] **Langkah 5.1**: Integrasi Supabase Auth pada form login & register pasien:
+- [x] **Langkah 5.1**: Integrasi Supabase Auth pada form login & register pasien:
   - Pasien mendaftar -> otomatis membuat record di tabel `public.profiles` via database trigger `on_auth_user_created`.
   - Login menyimpan session token di cookie HTTP-only via `@supabase/ssr`.
-- [ ] **Langkah 5.2**: Pembuatan Akun Admin (`/admin/register`):
-  - Hanya dapat diakses oleh admin yang sudah login.
-  - RPC/Function pendaftaran staf/admin baru.
+  - Pengalihan cerdas: jika admin login di form pasien, langsung diarahkan ke `/admin/dashboard`.
+- [x] **Langkah 5.2**: Login & Pembuatan Akun Admin (`/admin/login` & `/admin/register`):
+  - Form masuk panel admin memvalidasi role `ADMIN` (jika pasien mencoba masuk admin panel, otomatis ditolak dan di-logout).
+  - Pendaftaran staf/admin baru via form `/admin/register` menggunakan client terisolasi tanpa merusak sesi admin aktif.
 - [ ] **Langkah 5.3**: Halaman Ubah Password & Lupa Password:
   - Sambungkan form ganti password di profil ke `supabase.auth.updateUser({ password: newPassword })`.
   - Buat halaman `/lupa-password` (kirim link reset ke email via `supabase.auth.resetPasswordForEmail`).

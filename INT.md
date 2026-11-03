@@ -363,20 +363,28 @@ export function useLiveQueue() {
 
 ---
 
-## 9. Langkah 8: Membuat Akun Admin Pertama
+## 9. Langkah 8: Menyiapkan Akun Demo (Admin & Pasien)
 
+Untuk memudahkan pengujian alur, tersedia 2 akun demo pengujian yang dicantumkan di `README.md`:
+
+| Peran (Role) | Email | Password | Halaman Masuk |
+|---|---|---|---|
+| **Admin Utama** | `admin@klinik.test` | `Admin123!` | `/admin/login` |
+| **Pasien Demo** | `pasien@klinik.test` | `Pasien123!` | `/login` |
+
+### Opsi A (Lewat Dashboard UI - 1 Menit)
 1. Buka Supabase Dashboard -> **Authentication -> Users**.
 2. Klik tombol **"Add user" -> "Create user"**:
-   - Masukkan Email: `admin@klinik.test`
-   - Masukkan Password yang aman.
-   - Centang **"Auto Confirm User"**.
-3. Buka **SQL Editor** dan jalankan perintah satu baris ini untuk menetapkan role admin:
+   - Buat user 1: `admin@klinik.test` (password: `Admin123!`), centang **Auto Confirm User**.
+   - Buat user 2: `pasien@klinik.test` (password: `Pasien123!`), centang **Auto Confirm User**.
+3. Buka **SQL Editor** dan jalankan perintah ini:
    ```sql
-   update public.profiles
-   set role = 'admin', full_name = 'Admin Utama Klinik'
-   where id = (select id from auth.users where email = 'admin@klinik.test');
+   update public.profiles set role = 'admin', full_name = 'Admin Utama Klinik' where id = (select id from auth.users where email = 'admin@klinik.test');
+   update public.profiles set role = 'patient', full_name = 'Budi Pasien Demo', phone_number = '08123456789' where id = (select id from auth.users where email = 'pasien@klinik.test');
    ```
-4. Sekarang Anda dapat login ke `/admin/login` dengan akun tersebut dan mengakses seluruh fitur admin panel.
+
+### Opsi B (Otomatis via SQL)
+Script SQL di bagian bawah file `supabase/seed.sql` sudah otomatis menyiapkan kedua akun di atas jika Anda menjalankannya di SQL Editor.
 
 ---
 
