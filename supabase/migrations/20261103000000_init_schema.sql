@@ -1,46 +1,34 @@
 -- =============================================================================
 -- Clinic Appointment Platform — skema awal (Supabase / PostgreSQL)
 -- =============================================================================
--- Isi file ini (urut dari atas):
---   1. Enum
---   2. Tabel
---   3. Trigger umum (updated_at, profil otomatis, proteksi role)
---   4. Helper (is_admin, renumber_bookings)
---   5. RPC pasien  : get_availability, book_appointment, submit_payment_proof,
---                    cancel_appointment, rate_appointment
---   6. RPC admin   : approve/reject_appointment, check_in, call_next,
---                    mark_no_show, get_appointment_stats
---   7. RPC publik  : get_live_queue
---   8. Job otomatis: process_expired_appointments (dipanggil pg_cron)
---   9. Row Level Security (RLS)
---  10. Storage bucket + policy
---  11. Realtime
---
--- Aturan penting:
---   - Semua aksi yang mengubah > 1 baris / > 1 tabel dibuat sebagai FUNCTION.
---     Satu pemanggilan function = satu transaksi SQL (otomatis rollback bila error).
---   - Tabel appointments TIDAK punya policy insert/update untuk client.
---     Perubahan hanya lewat RPC di bawah, jadi aturan bisnis tidak bisa dilewati.
---   - Zona waktu klinik: Asia/Jakarta (WIB).
+-- Bersifat idempotent (aman dijalankan berulang kali tanpa error duplikasi).
 -- =============================================================================
-
 
 -- -----------------------------------------------------------------------------
 -- 1. ENUM
 -- -----------------------------------------------------------------------------
-create type public.user_role as enum ('patient', 'admin');
+do $$ begin
+  create type public.user_role as enum ('patient', 'admin');
+exception when duplicate_object then null;
+end $$;
 
-create type public.gender as enum ('male', 'female', 'other');
+do $$ begin
+  create type public.gender as enum ('male', 'female', 'other');
+exception when duplicate_object then null;
+end $$;
 
 -- 6 status transaksi sesuai BRIEF.md
-create type public.transaction_status as enum (
-  'waiting_payment',       -- menunggu bukti bayar (maks 30 menit)
-  'waiting_confirmation',  -- bukti sudah diunggah, menunggu admin
-  'done',                  -- diterima admin, QR terbit
-  'rejected',              -- ditolak admin
-  'expired',               -- tidak upload bukti dalam 30 menit
-  'canceled'               -- dibatalkan pasien / otomatis saat sesi mulai
-);
+do $$ begin
+  create type public.transaction_status as enum (
+    'waiting_payment',       -- menunggu bukti bayar (maks 30 menit)
+    'waiting_confirmation',  -- bukti sudah diunggah, menunggu admin
+    'done',                  -- diterima admin, QR terbit
+    'rejected',              -- ditolak admin
+    'expired',               -- tidak upload bukti dalam 30 menit
+    'canceled'               -- dibatalkan pasien / otomatis saat sesi mulai
+  );
+exception when duplicate_object then null;
+end $$;
 
 
 -- -----------------------------------------------------------------------------
@@ -48,7 +36,7 @@ create type public.transaction_status as enum (
 -- -----------------------------------------------------------------------------
 
 -- Profil 1:1 dengan auth.users (akun login dikelola Supabase Auth)
-create table public.profiles (
+create table if not exists public.profiles (
   id            uuid primary key references auth.users (id) on delete cascade,
   role          public.user_role not null default 'patient',
   full_name     text not null default '',
@@ -61,7 +49,7 @@ create table public.profiles (
   updated_at    timestamptz not null default now()
 );
 
-create table public.specialists (
+create table if not exists public.specialists (
   id          uuid primary key default gen_random_uuid(),
   name        text not null unique,
   description text,
@@ -71,7 +59,7 @@ create table public.specialists (
 );
 
 -- Dokter TIDAK punya akun login (MVP: role hanya patient & admin)
-create table public.doctors (
+create table if not exists public.doctors (
   id               uuid primary key default gen_random_uuid(),
   specialist_id    uuid references public.specialists (id) on delete set null,
   full_name        text not null,
@@ -85,7 +73,7 @@ create table public.doctors (
 );
 
 -- Jadwal praktik mingguan (template). Contoh: Senin 10:00–12:00, kuota 10
-create table public.doctor_schedules (
+create table if not exists public.doctor_schedules (
   id            uuid primary key default gen_random_uuid(),
   doctor_id     uuid not null references public.doctors (id) on delete cascade,
   day_of_week   smallint not null check (day_of_week between 0 and 6), -- 0 = Minggu
@@ -100,8 +88,7 @@ create table public.doctor_schedules (
 );
 
 -- Sesi praktik nyata di satu tanggal. Dibuat otomatis saat booking pertama.
--- Kuota disalin dari jadwal agar perubahan jadwal tidak mengubah sesi yang sudah ada.
-create table public.practice_sessions (
+create table if not exists public.practice_sessions (
   id                   uuid primary key default gen_random_uuid(),
   doctor_id            uuid not null references public.doctors (id) on delete cascade,
   schedule_id          uuid references public.doctor_schedules (id) on delete set null,
@@ -116,7 +103,7 @@ create table public.practice_sessions (
   unique (doctor_id, session_date, start_time)
 );
 
-create table public.appointments (
+create table if not exists public.appointments (
   id                  uuid primary key default gen_random_uuid(),
   code                text not null unique default (
     'APT-' || to_char(now() at time zone 'Asia/Jakarta', 'YYMMDD') || '-' ||
@@ -132,12 +119,9 @@ create table public.appointments (
   payment_uploaded_at timestamptz,
   rejection_reason    text,
   confirmed_at        timestamptz,
-  -- Nomor urut booking di sesi. Dihitung ulang saat ada booking yang batal/ditolak/expired.
   booking_number      integer,
-  -- Token isi QR, terbit saat status 'done'
   qr_token            uuid unique,
   checked_in_at       timestamptz,
-  -- Nomor antrean, terbit saat check-in (urut kedatangan)
   queue_number        integer,
   is_no_show          boolean not null default false,
   created_at          timestamptz not null default now(),
@@ -146,15 +130,15 @@ create table public.appointments (
 );
 
 -- Satu pasien hanya boleh punya 1 booking aktif per sesi
-create unique index appointments_one_active_per_session
+create unique index if not exists appointments_one_active_per_session
   on public.appointments (patient_id, session_id)
   where status in ('waiting_payment', 'waiting_confirmation', 'done');
 
-create index appointments_session_idx on public.appointments (session_id);
-create index appointments_patient_idx on public.appointments (patient_id, created_at desc);
-create index appointments_status_idx  on public.appointments (status);
+create index if not exists appointments_session_idx on public.appointments (session_id);
+create index if not exists appointments_patient_idx on public.appointments (patient_id, created_at desc);
+create index if not exists appointments_status_idx  on public.appointments (status);
 
-create table public.ratings (
+create table if not exists public.ratings (
   id             uuid primary key default gen_random_uuid(),
   appointment_id uuid not null unique references public.appointments (id) on delete cascade,
   patient_id     uuid not null references public.profiles (id) on delete cascade,
@@ -164,10 +148,10 @@ create table public.ratings (
   created_at     timestamptz not null default now()
 );
 
-create index ratings_doctor_idx on public.ratings (doctor_id);
+create index if not exists ratings_doctor_idx on public.ratings (doctor_id);
 
 -- Rata-rata rating per dokter (dipakai di kartu & detail dokter)
-create view public.doctor_rating_summary
+create or replace view public.doctor_rating_summary
 with (security_invoker = true) as
 select
   doctor_id,
@@ -191,14 +175,22 @@ begin
 end;
 $$;
 
-create trigger profiles_updated_at         before update on public.profiles         for each row execute function public.set_updated_at();
-create trigger specialists_updated_at      before update on public.specialists      for each row execute function public.set_updated_at();
-create trigger doctors_updated_at          before update on public.doctors          for each row execute function public.set_updated_at();
+drop trigger if exists profiles_updated_at on public.profiles;
+create trigger profiles_updated_at before update on public.profiles for each row execute function public.set_updated_at();
+
+drop trigger if exists specialists_updated_at on public.specialists;
+create trigger specialists_updated_at before update on public.specialists for each row execute function public.set_updated_at();
+
+drop trigger if exists doctors_updated_at on public.doctors;
+create trigger doctors_updated_at before update on public.doctors for each row execute function public.set_updated_at();
+
+drop trigger if exists doctor_schedules_updated_at on public.doctor_schedules;
 create trigger doctor_schedules_updated_at before update on public.doctor_schedules for each row execute function public.set_updated_at();
-create trigger appointments_updated_at     before update on public.appointments     for each row execute function public.set_updated_at();
+
+drop trigger if exists appointments_updated_at on public.appointments;
+create trigger appointments_updated_at before update on public.appointments for each row execute function public.set_updated_at();
 
 -- Saat user daftar (auth.users), buat baris profiles otomatis.
--- full_name & phone_number dikirim dari form register lewat options.data.
 create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
@@ -211,11 +203,13 @@ begin
     new.id,
     coalesce(new.raw_user_meta_data ->> 'full_name', ''),
     new.raw_user_meta_data ->> 'phone_number'
-  );
+  )
+  on conflict (id) do nothing;
   return new;
 end;
 $$;
 
+drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();
@@ -225,7 +219,6 @@ create trigger on_auth_user_created
 -- 4. HELPER
 -- -----------------------------------------------------------------------------
 
--- true bila user yang sedang login adalah admin
 create or replace function public.is_admin()
 returns boolean
 language sql
@@ -238,8 +231,6 @@ as $$
   );
 $$;
 
--- Pasien tidak boleh mengubah role-nya sendiri.
--- auth.uid() null = dijalankan dari SQL Editor / service role → diizinkan.
 create or replace function public.protect_profile_role()
 returns trigger
 language plpgsql
@@ -254,11 +245,11 @@ begin
 end;
 $$;
 
+drop trigger if exists profiles_protect_role on public.profiles;
 create trigger profiles_protect_role
   before update on public.profiles
   for each row execute function public.protect_profile_role();
 
--- Hitung ulang booking_number di satu sesi (dipanggil setelah ada booking yang lepas)
 create or replace function public.renumber_bookings(p_session_id uuid)
 returns void
 language plpgsql
@@ -290,7 +281,6 @@ $$;
 -- 5. RPC PASIEN
 -- -----------------------------------------------------------------------------
 
--- Slot sesi seorang dokter di satu tanggal + sisa kuota
 create or replace function public.get_availability(p_doctor_id uuid, p_date date)
 returns table (
   schedule_id uuid,
@@ -333,7 +323,6 @@ as $$
   order by s.start_time;
 $$;
 
--- Buat booking. Mengunci baris sesi agar kuota aman saat banyak pasien booking bersamaan.
 create or replace function public.book_appointment(p_schedule_id uuid, p_date date)
 returns public.appointments
 language plpgsql
@@ -370,7 +359,6 @@ begin
     raise exception 'Sesi sudah dimulai atau sudah lewat';
   end if;
 
-  -- Buat sesi bila belum ada (aman bila 2 request datang bersamaan)
   insert into public.practice_sessions (
     doctor_id, schedule_id, session_date, start_time, end_time, starts_at, ends_at, patient_quota
   ) values (
@@ -381,7 +369,6 @@ begin
   )
   on conflict (doctor_id, session_date, start_time) do nothing;
 
-  -- Kunci sesi: request lain menunggu sampai transaksi ini selesai
   select * into v_session
   from public.practice_sessions
   where doctor_id = v_doctor.id and session_date = p_date and start_time = v_schedule.start_time
@@ -411,7 +398,6 @@ exception
 end;
 $$;
 
--- Simpan bukti bayar (file sudah diunggah ke Storage oleh client)
 create or replace function public.submit_payment_proof(p_appointment_id uuid, p_path text)
 returns public.appointments
 language plpgsql
@@ -421,7 +407,6 @@ as $$
 declare
   v_result public.appointments;
 begin
-  -- File wajib ada di folder milik user sendiri: <user_id>/<nama-file>
   if split_part(p_path, '/', 1) <> auth.uid()::text then
     raise exception 'Lokasi file bukti bayar tidak valid';
   end if;
@@ -444,7 +429,6 @@ begin
 end;
 $$;
 
--- Pasien membatalkan janji sebelum dikonfirmasi admin
 create or replace function public.cancel_appointment(p_appointment_id uuid)
 returns public.appointments
 language plpgsql
@@ -470,8 +454,6 @@ begin
 end;
 $$;
 
--- Rating hanya setelah janji selesai: status done, sudah check-in,
--- dan sudah dipanggil (atau sesi sudah berakhir)
 create or replace function public.rate_appointment(
   p_appointment_id uuid,
   p_rating smallint,
@@ -580,7 +562,6 @@ begin
 end;
 $$;
 
--- Scan QR → check-in → dapat nomor antrean (urut kedatangan)
 create or replace function public.check_in(p_qr_token uuid)
 returns public.appointments
 language plpgsql
@@ -602,7 +583,6 @@ begin
     raise exception 'QR tidak dikenali';
   end if;
 
-  -- Kunci sesi agar 2 check-in bersamaan tidak dapat nomor yang sama
   select * into v_session from public.practice_sessions where id = v_appt.session_id for update;
 
   if v_session.session_date <> (now() at time zone 'Asia/Jakarta')::date then
@@ -635,7 +615,6 @@ begin
 end;
 $$;
 
--- Panggil pasien berikutnya (hanya pasien yang sudah check-in)
 create or replace function public.call_next(p_session_id uuid)
 returns public.practice_sessions
 language plpgsql
@@ -675,7 +654,6 @@ begin
 end;
 $$;
 
--- Tandai tidak hadir: sudah dikonfirmasi tapi belum check-in, dan sesi sudah mulai
 create or replace function public.mark_no_show(p_appointment_id uuid)
 returns public.appointments
 language plpgsql
@@ -708,9 +686,8 @@ begin
 end;
 $$;
 
--- Statistik untuk grafik: per hari / bulan / tahun, opsional per dokter
 create or replace function public.get_appointment_stats(
-  p_period    text,                 -- 'day' | 'month' | 'year'
+  p_period    text,
   p_from      date,
   p_to        date,
   p_doctor_id uuid default null
@@ -766,8 +743,6 @@ $$;
 -- 7. RPC PUBLIK
 -- -----------------------------------------------------------------------------
 
--- Layar antrean: sesi hari ini, nomor yang dilayani, dan 3 nomor berikutnya.
--- Tidak mengembalikan data pribadi pasien.
 create or replace function public.get_live_queue()
 returns table (
   session_id           uuid,
@@ -814,11 +789,8 @@ $$;
 
 
 -- -----------------------------------------------------------------------------
--- 8. JOB OTOMATIS (dijadwalkan pg_cron tiap menit, lihat migration cron)
+-- 8. JOB OTOMATIS
 -- -----------------------------------------------------------------------------
--- - waiting_payment lewat 30 menit           → expired
--- - waiting_confirmation saat sesi sudah mulai → canceled
--- Kuota otomatis kembali karena hanya status aktif yang dihitung.
 create or replace function public.process_expired_appointments()
 returns void
 language plpgsql
@@ -856,7 +828,6 @@ begin
 end;
 $$;
 
--- Function internal: jangan bisa dipanggil dari client
 revoke execute on function public.renumber_bookings(uuid)         from public, anon, authenticated;
 revoke execute on function public.process_expired_appointments() from public, anon, authenticated;
 revoke execute on function public.handle_new_user()              from public, anon, authenticated;
@@ -866,9 +837,6 @@ revoke execute on function public.handle_new_user()              from public, an
 -- 9. ROW LEVEL SECURITY
 -- -----------------------------------------------------------------------------
 
--- Jaring Pengaman Otomatis (Event Trigger):
--- Setiap kali ada tabel baru dibuat di schema 'public', RLS otomatis aktif.
--- Mencegah developer baru lupa menulis 'ENABLE ROW LEVEL SECURITY'.
 create or replace function public.rls_auto_enable()
 returns event_trigger
 language plpgsql
@@ -889,6 +857,8 @@ begin
 end;
 $$;
 
+-- Drop trigger dulu jika sudah ada agar re-run tidak error
+drop event trigger if exists ensure_rls;
 create event trigger ensure_rls
 on ddl_command_end
 when tag in ('CREATE TABLE', 'CREATE TABLE AS', 'SELECT INTO')
@@ -902,68 +872,85 @@ alter table public.practice_sessions enable row level security;
 alter table public.appointments      enable row level security;
 alter table public.ratings           enable row level security;
 
--- profiles: lihat & ubah milik sendiri; admin lihat semua
+-- profiles
+drop policy if exists "profiles: baca milik sendiri atau admin" on public.profiles;
 create policy "profiles: baca milik sendiri atau admin"
   on public.profiles for select to authenticated
   using (id = auth.uid() or public.is_admin());
 
+drop policy if exists "profiles: ubah milik sendiri" on public.profiles;
 create policy "profiles: ubah milik sendiri"
   on public.profiles for update to authenticated
   using (id = auth.uid())
   with check (id = auth.uid());
 
--- specialists, doctors, doctor_schedules: publik baca, admin kelola
-create policy "specialists: publik baca"  on public.specialists      for select to anon, authenticated using (true);
-create policy "specialists: admin kelola" on public.specialists      for all    to authenticated using (public.is_admin()) with check (public.is_admin());
+-- specialists
+drop policy if exists "specialists: publik baca" on public.specialists;
+create policy "specialists: publik baca"  on public.specialists for select to anon, authenticated using (true);
 
-create policy "doctors: publik baca"      on public.doctors          for select to anon, authenticated using (true);
-create policy "doctors: admin kelola"     on public.doctors          for all    to authenticated using (public.is_admin()) with check (public.is_admin());
+drop policy if exists "specialists: admin kelola" on public.specialists;
+create policy "specialists: admin kelola" on public.specialists for all to authenticated using (public.is_admin()) with check (public.is_admin());
 
-create policy "schedules: publik baca"    on public.doctor_schedules for select to anon, authenticated using (true);
-create policy "schedules: admin kelola"   on public.doctor_schedules for all    to authenticated using (public.is_admin()) with check (public.is_admin());
+-- doctors
+drop policy if exists "doctors: publik baca" on public.doctors;
+create policy "doctors: publik baca"  on public.doctors for select to anon, authenticated using (true);
 
--- practice_sessions: publik baca (tanpa data pribadi). Ditulis hanya lewat RPC.
-create policy "sessions: publik baca"     on public.practice_sessions for select to anon, authenticated using (true);
+drop policy if exists "doctors: admin kelola" on public.doctors;
+create policy "doctors: admin kelola" on public.doctors for all to authenticated using (public.is_admin()) with check (public.is_admin());
 
--- appointments: pasien baca miliknya, admin baca semua. Ditulis hanya lewat RPC.
+-- schedules
+drop policy if exists "schedules: publik baca" on public.doctor_schedules;
+create policy "schedules: publik baca"  on public.doctor_schedules for select to anon, authenticated using (true);
+
+drop policy if exists "schedules: admin kelola" on public.doctor_schedules;
+create policy "schedules: admin kelola" on public.doctor_schedules for all to authenticated using (public.is_admin()) with check (public.is_admin());
+
+-- sessions
+drop policy if exists "sessions: publik baca" on public.practice_sessions;
+create policy "sessions: publik baca" on public.practice_sessions for select to anon, authenticated using (true);
+
+-- appointments
+drop policy if exists "appointments: baca milik sendiri atau admin" on public.appointments;
 create policy "appointments: baca milik sendiri atau admin"
   on public.appointments for select to authenticated
   using (patient_id = auth.uid() or public.is_admin());
 
--- ratings: publik baca (ulasan dokter). Ditulis hanya lewat RPC.
-create policy "ratings: publik baca"      on public.ratings          for select to anon, authenticated using (true);
+-- ratings
+drop policy if exists "ratings: publik baca" on public.ratings;
+create policy "ratings: publik baca" on public.ratings for select to anon, authenticated using (true);
 
 
 -- -----------------------------------------------------------------------------
 -- 10. STORAGE
 -- -----------------------------------------------------------------------------
--- Struktur path: <bucket>/<user_id>/<nama-file>
 insert into storage.buckets (id, name, public) values
   ('avatars',        'avatars',        true),
   ('doctor-photos',  'doctor-photos',  true),
   ('payment-proofs', 'payment-proofs', false)
 on conflict (id) do nothing;
 
--- avatars: user unggah/ubah file di foldernya sendiri. Bucket publik → baca bebas.
+drop policy if exists "avatars: upload milik sendiri" on storage.objects;
 create policy "avatars: upload milik sendiri"
   on storage.objects for insert to authenticated
   with check (bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text);
 
+drop policy if exists "avatars: ubah milik sendiri" on storage.objects;
 create policy "avatars: ubah milik sendiri"
   on storage.objects for update to authenticated
   using (bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text);
 
--- doctor-photos: hanya admin
+drop policy if exists "doctor-photos: admin kelola" on storage.objects;
 create policy "doctor-photos: admin kelola"
   on storage.objects for all to authenticated
   using (bucket_id = 'doctor-photos' and public.is_admin())
   with check (bucket_id = 'doctor-photos' and public.is_admin());
 
--- payment-proofs (privat): pasien unggah & lihat miliknya, admin lihat semua
+drop policy if exists "payment-proofs: upload milik sendiri" on storage.objects;
 create policy "payment-proofs: upload milik sendiri"
   on storage.objects for insert to authenticated
   with check (bucket_id = 'payment-proofs' and (storage.foldername(name))[1] = auth.uid()::text);
 
+drop policy if exists "payment-proofs: baca milik sendiri atau admin" on storage.objects;
 create policy "payment-proofs: baca milik sendiri atau admin"
   on storage.objects for select to authenticated
   using (
@@ -975,6 +962,9 @@ create policy "payment-proofs: baca milik sendiri atau admin"
 -- -----------------------------------------------------------------------------
 -- 11. REALTIME
 -- -----------------------------------------------------------------------------
--- Layar antrean publik mendengarkan perubahan current_queue_number
-alter publication supabase_realtime add table public.practice_sessions;
-
+do $$
+begin
+  alter publication supabase_realtime add table public.practice_sessions;
+exception
+  when duplicate_object then null;
+end $$;

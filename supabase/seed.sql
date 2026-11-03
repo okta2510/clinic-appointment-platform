@@ -10,7 +10,8 @@ insert into public.specialists (id, name, description) values
   ('11111111-0000-0000-0000-000000000003', 'Spesialis Penyakit Dalam', 'Diabetes, hipertensi, dan penyakit organ dalam'),
   ('11111111-0000-0000-0000-000000000004', 'Spesialis Kulit & Kelamin','Jerawat, alergi kulit, dan penyakit kelamin'),
   ('11111111-0000-0000-0000-000000000005', 'Dokter Gigi',              'Perawatan dan pemeriksaan gigi'),
-  ('11111111-0000-0000-0000-000000000006', 'Spesialis Kandungan',      'Kehamilan dan kesehatan reproduksi wanita');
+  ('11111111-0000-0000-0000-000000000006', 'Spesialis Kandungan',      'Kehamilan dan kesehatan reproduksi wanita')
+on conflict (id) do nothing;
 
 -- Dokter (harga dalam Rupiah)
 insert into public.doctors (id, specialist_id, full_name, bio, experience_years, consultation_fee) values
@@ -20,7 +21,8 @@ insert into public.doctors (id, specialist_id, full_name, bio, experience_years,
   ('22222222-0000-0000-0000-000000000004', '11111111-0000-0000-0000-000000000003', 'dr. Budi Santoso, Sp.PD',     'Menangani diabetes, hipertensi, dan kolesterol.', 15, 300000),
   ('22222222-0000-0000-0000-000000000005', '11111111-0000-0000-0000-000000000004', 'dr. Maya Lestari, Sp.KK',     'Perawatan jerawat, eksim, dan alergi kulit.', 8, 275000),
   ('22222222-0000-0000-0000-000000000006', '11111111-0000-0000-0000-000000000005', 'drg. Fajar Nugroho',          'Scaling, tambal gigi, dan konsultasi ortodonti.', 7, 150000),
-  ('22222222-0000-0000-0000-000000000007', '11111111-0000-0000-0000-000000000006', 'dr. Dewi Anggraini, Sp.OG',   'Pemeriksaan kehamilan dan USG.', 11, 350000);
+  ('22222222-0000-0000-0000-000000000007', '11111111-0000-0000-0000-000000000006', 'dr. Dewi Anggraini, Sp.OG',   'Pemeriksaan kehamilan dan USG.', 11, 350000)
+on conflict (id) do nothing;
 
 -- Jadwal mingguan (0 = Minggu ... 6 = Sabtu)
 insert into public.doctor_schedules (doctor_id, day_of_week, start_time, end_time, patient_quota) values
@@ -39,7 +41,8 @@ insert into public.doctor_schedules (doctor_id, day_of_week, start_time, end_tim
   ('22222222-0000-0000-0000-000000000006', 1, '13:00', '17:00', 8),
   ('22222222-0000-0000-0000-000000000006', 4, '08:00', '12:00', 8),
   ('22222222-0000-0000-0000-000000000007', 2, '09:00', '12:00', 6),
-  ('22222222-0000-0000-0000-000000000007', 5, '09:00', '12:00', 6);
+  ('22222222-0000-0000-0000-000000000007', 5, '09:00', '12:00', 6)
+on conflict (doctor_id, day_of_week, start_time) do nothing;
 
 -- -----------------------------------------------------------------------------
 -- Akun admin

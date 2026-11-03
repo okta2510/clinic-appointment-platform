@@ -1,14 +1,18 @@
 -- =============================================================================
--- Job terjadwal (pg_cron)
+-- Job terjadwal (pg_cron) — Idempotent (aman dijalankan berulang kali)
 -- =============================================================================
--- Tiap menit: ubah booking yang lewat batas bayar → expired,
+-- Tiap menit: ubah booking yang lewat batas bayar 30m → expired,
 -- dan yang belum dikonfirmasi saat sesi mulai → canceled.
---
--- Bila migration ini gagal karena pg_cron belum aktif:
--- Dashboard → Database → Extensions → aktifkan "pg_cron", lalu jalankan ulang.
 -- =============================================================================
 
 create extension if not exists pg_cron with schema pg_catalog;
+
+-- Hapus job lama bila sudah ada agar tidak error duplikasi saat re-run
+do $$
+begin
+  perform cron.unschedule('process-expired-appointments');
+exception when others then null;
+end $$;
 
 select cron.schedule(
   'process-expired-appointments',
@@ -18,5 +22,3 @@ select cron.schedule(
 
 -- Cek job : select * from cron.job;
 -- Cek log : select * from cron.job_run_details order by start_time desc limit 10;
--- Hapus   : select cron.unschedule('process-expired-appointments');
-
