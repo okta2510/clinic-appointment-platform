@@ -249,7 +249,8 @@ export const useChangePassword = ({
 }: TMutationCallbacks<TApiSuccessResponse<Record<string, never>>> = {}) => {
   return useMutation({
     mutationKey: ['change-password'],
-    mutationFn: async (newPassword: string) => {
+    mutationFn: async (payload: string | { newPassword: string; currentPassword?: string }) => {
+      const newPassword = typeof payload === 'string' ? payload : payload.newPassword;
       const supabase = createClient();
       const { error } = await supabase.auth.updateUser({
         password: newPassword,

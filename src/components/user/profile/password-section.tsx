@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useChangePassword } from '@/hooks/api/use-auth';
 import { card, primaryBtn, secondaryBtn } from '@/lib/styles';
 import { PasswordInput } from '@/components/ui/password-input';
 import { Field } from '@/components/ui/field';
@@ -47,6 +48,8 @@ export function PasswordSection() {
     setIsOpen(false);
   }
 
+  const { mutateAsync: changePassword } = useChangePassword();
+
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     setServerError('');
@@ -58,12 +61,11 @@ export function PasswordSection() {
 
     setIsSaving(true);
     try {
-      // TODO: panggil API ubah password Anda di sini, contoh:
-      // await changePassword({ currentPassword, newPassword });
+      await changePassword({ currentPassword, newPassword });
       resetForm();
       setStatus('Password berhasil diubah.');
-    } catch {
-      setServerError('Password gagal diubah. Periksa password saat ini lalu coba lagi.');
+    } catch (err: any) {
+      setServerError(err?.message || 'Password gagal diubah. Periksa password saat ini lalu coba lagi.');
     } finally {
       setIsSaving(false);
     }
