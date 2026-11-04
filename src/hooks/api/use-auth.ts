@@ -1,5 +1,5 @@
-import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { apiClient } from '@/lib/api-client';
 import { createClient } from '@/lib/supabase/client';
 import type {
   TApiError,
@@ -11,31 +11,9 @@ import type {
   TLogin,
   TLoginResponse,
   TRegister,
-  TRole,
 } from '@/types/auth';
 
-// Helper pembuat objek TAuthUser dari data Supabase Auth & profil
-function buildAuthUser(
-  user: { id: string; email?: string; created_at: string; updated_at?: string; user_metadata?: Record<string, unknown> },
-  profile?: { full_name?: string | null; phone_number?: string | null; role?: string | null; avatar_url?: string | null; created_at?: string; updated_at?: string } | null,
-): TAuthUser {
-  const rawRole = profile?.role || (user.user_metadata?.role as string) || 'patient';
-  const role: TRole = rawRole.toUpperCase() === 'ADMIN' ? 'ADMIN' : 'PATIENT';
-
-  return {
-    id: user.id,
-    email: user.email ?? '',
-    full_name: profile?.full_name || (user.user_metadata?.full_name as string) || '',
-    phone_number: profile?.phone_number || (user.user_metadata?.phone_number as string) || '',
-    role,
-    profile_picture: profile?.avatar_url || null,
-    is_active: true,
-    created_at: profile?.created_at || user.created_at,
-    updated_at: profile?.updated_at || user.updated_at || user.created_at,
-  };
-}
-
-// POST /auth/login -> Supabase auth.signInWithPassword
+// POST /auth/login -> REST API Express Backend
 export const useLogin = ({
   onError,
   onSuccess,
@@ -43,35 +21,20 @@ export const useLogin = ({
   const queryClient = useQueryClient();
   return useMutation({
     mutationKey: ['login'],
-    mutationFn: async (body: TLogin) => {
-      const supabase = createClient();
-      const { data, error } = await supabase.auth.signInWithPassword({
+    mutationFn: async (body: TLogin): Promise<TApiSuccessResponse<TLoginResponse>> => {
+      const res = await apiClient.post<TApiSuccessResponse<TLoginResponse>>('/auth/login', {
         email: body.email.trim(),
         password: body.password,
       });
 
-      if (error) throw error;
-      if (!data.user || !data.session) {
-        throw new Error('Gagal mendapatkan sesi login.');
+      const { token, user } = res.data.data;
+      if (typeof window !== 'undefined' && token) {
+        localStorage.setItem('token', token);
+        // Set cookie document juga untuk kompatibilitas SSR
+        document.cookie = `token=${encodeURIComponent(token)}; path=/; max-age=604800; SameSite=Lax`;
       }
 
-      // Ambil data profil untuk mendapatkan role dan nama
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', data.user.id)
-        .maybeSingle();
-
-      const user = buildAuthUser(data.user, profile);
-
-      return {
-        success: true as const,
-        message: 'Berhasil masuk',
-        data: {
-          token: data.session.access_token,
-          user,
-        },
-      };
+      return res.data;
     },
     onSuccess: (response) => {
       queryClient.setQueryData(['me'], response.data.user);
@@ -81,42 +44,21 @@ export const useLogin = ({
   });
 };
 
-// POST /auth/register -> Supabase auth.signUp
+// POST /auth/register -> REST API Express Backend
 export const useRegister = ({
   onError,
   onSuccess,
 }: TMutationCallbacks<TApiSuccessResponse<TAuthUser>> = {}) => {
   return useMutation({
     mutationKey: ['register'],
-    mutationFn: async (body: TRegister) => {
-      const supabase = createClient();
-      const { data, error } = await supabase.auth.signUp({
+    mutationFn: async (body: TRegister): Promise<TApiSuccessResponse<TAuthUser>> => {
+      const res = await apiClient.post<TApiSuccessResponse<TAuthUser>>('/auth/register', {
         email: body.email.trim(),
         password: body.password,
-        options: {
-          data: {
-            full_name: body.full_name.trim(),
-            phone_number: body.phone_number.trim(),
-          },
-        },
+        full_name: body.full_name.trim(),
+        phone_number: body.phone_number.trim(),
       });
-
-      if (error) throw error;
-      if (!data.user) {
-        throw new Error('Gagal membuat akun.');
-      }
-
-      const user = buildAuthUser(data.user, {
-        full_name: body.full_name,
-        phone_number: body.phone_number,
-        role: 'patient',
-      });
-
-      return {
-        success: true as const,
-        message: 'Registrasi berhasil',
-        data: user,
-      };
+      return res.data;
     },
     onSuccess: (response) => onSuccess?.(response),
     onError: (error) => onError?.(error as TApiError),
@@ -130,55 +72,14 @@ export const useRegisterAdmin = ({
 }: TMutationCallbacks<TApiSuccessResponse<TAuthUser>> = {}) => {
   return useMutation({
     mutationKey: ['register-admin'],
-    mutationFn: async (body: TRegister) => {
-      const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-      const key =
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-        process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!;
-
-      // Client terisolasi tanpa session storage agar sesi admin yang aktif tidak terganggu
-      const tempClient = createSupabaseClient(url, key, {
-        auth: { persistSession: false, autoRefreshToken: false },
-      });
-
-      const { data, error } = await tempClient.auth.signUp({
+    mutationFn: async (body: TRegister): Promise<TApiSuccessResponse<TAuthUser>> => {
+      const res = await apiClient.post<TApiSuccessResponse<TAuthUser>>('/auth/admins', {
         email: body.email.trim(),
         password: body.password,
-        options: {
-          data: {
-            full_name: body.full_name.trim(),
-            phone_number: body.phone_number.trim(),
-          },
-        },
+        full_name: body.full_name.trim(),
+        phone_number: body.phone_number.trim(),
       });
-
-      if (error) throw error;
-      if (!data.user) {
-        throw new Error('Gagal mendaftarkan admin baru.');
-      }
-
-      // Update role di tabel profiles menjadi 'admin' menggunakan hak admin yang sedang login
-      const currentSupabase = createClient();
-      const { error: roleError } = await currentSupabase
-        .from('profiles')
-        .update({ role: 'admin' })
-        .eq('id', data.user.id);
-
-      if (roleError) {
-        console.error('Gagal menetapkan role admin:', roleError);
-      }
-
-      const user = buildAuthUser(data.user, {
-        full_name: body.full_name,
-        phone_number: body.phone_number,
-        role: 'admin',
-      });
-
-      return {
-        success: true as const,
-        message: 'Admin berhasil didaftarkan',
-        data: user,
-      };
+      return res.data;
     },
     onSuccess: (response) => onSuccess?.(response),
     onError: (error) => onError?.(error as TApiError),
@@ -190,31 +91,46 @@ export const useMe = () => {
   return useQuery<TAuthUser | null>({
     queryKey: ['me'],
     retry: false,
+    staleTime: 1000 * 60 * 5, // 5 menit
     queryFn: async () => {
       try {
-        const supabase = createClient();
-        const {
-          data: { user },
-          error,
-        } = await supabase.auth.getUser();
-
-        if (error || !user) return null;
-
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', user.id)
-          .maybeSingle();
-
-        return buildAuthUser(user, profile);
-      } catch {
+        const res = await apiClient.get<TApiSuccessResponse<TAuthUser>>('/auth/me');
+        if (res.data?.success && res.data.data) {
+          return res.data.data;
+        }
+        return null;
+      } catch (err: any) {
+        // Fallback coba baca via Supabase client jika backend offline/belum nyala
+        try {
+          const supabase = createClient();
+          const { data: { user } } = await supabase.auth.getUser();
+          if (!user) return null;
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', user.id)
+            .maybeSingle();
+          if (profile) {
+            return {
+              id: user.id,
+              email: user.email ?? '',
+              full_name: profile.full_name || '',
+              phone_number: profile.phone_number || '',
+              role: (profile.role || 'patient').toUpperCase() === 'ADMIN' ? 'ADMIN' : 'PATIENT',
+              profile_picture: profile.avatar_url || null,
+              is_active: true,
+              created_at: profile.created_at || user.created_at,
+              updated_at: profile.updated_at || user.created_at,
+            };
+          }
+        } catch {}
         return null;
       }
     },
   });
 };
 
-// POST /auth/logout -> Supabase auth.signOut
+// POST /auth/logout -> REST API Express Backend
 export const useLogout = ({
   onError,
   onSuccess,
@@ -222,13 +138,24 @@ export const useLogout = ({
   const queryClient = useQueryClient();
   return useMutation({
     mutationKey: ['logout'],
-    mutationFn: async () => {
-      const supabase = createClient();
-      const { error } = await supabase.auth.signOut();
-      if (error) throw error;
+    mutationFn: async (): Promise<TApiSuccessResponse<Record<string, never>>> => {
+      try {
+        await apiClient.post('/auth/logout');
+      } catch {}
+
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('token');
+        document.cookie = 'token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+      }
+
+      // Pastikan supabase auth juga sign out jika ada sisa session
+      try {
+        const supabase = createClient();
+        await supabase.auth.signOut();
+      } catch {}
 
       return {
-        success: true as const,
+        success: true,
         message: 'Berhasil keluar',
         data: {},
       };

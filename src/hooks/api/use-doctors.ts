@@ -4,7 +4,7 @@ import {
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query';
-import { createClient } from '@/lib/supabase/client';
+import { apiClient } from '@/lib/api-client';
 import type {
   TApiError,
   TApiSuccessResponse,
@@ -18,9 +18,9 @@ import type {
   TDoctorUpdate,
 } from '@/types/doctor';
 
-function mapDoctorRow(row: any): TDoctor {
-  const schedules = (row.doctor_schedules || [])
-    .filter((s: any) => s.is_active)
+function normalizeDoctor(d: any): TDoctor {
+  const schedules = (d.doctor_schedules || [])
+    .filter((s: any) => s.is_active !== false)
     .map((s: any) => ({
       id: s.id,
       day_of_week: Number(s.day_of_week),
@@ -28,52 +28,60 @@ function mapDoctorRow(row: any): TDoctor {
       end_time: s.end_time,
       patient_quota: Number(s.patient_quota),
     }))
-    .sort((a: any, b: any) => a.day_of_week - b.day_of_week || a.start_time.localeCompare(b.start_time));
+    .sort(
+      (a: any, b: any) =>
+        a.day_of_week - b.day_of_week || a.start_time.localeCompare(b.start_time),
+    );
 
-  const ratings = Array.isArray(row.ratings) ? row.ratings : [];
-  const ratingCount = ratings.length;
-  const ratingSum = ratings.reduce((sum: number, r: any) => sum + (Number(r.rating) || 0), 0);
-  const ratingAvg = ratingCount > 0 ? ratingSum / ratingCount : null;
+  const ratings = Array.isArray(d.ratings) ? d.ratings : [];
+  const ratingCount = d.rating_count ?? ratings.length;
+  const ratingAvg = d.rating_avg ?? (ratingCount > 0
+    ? ratings.reduce((sum: number, r: any) => sum + (Number(r.rating) || 0), 0) / ratingCount
+    : null);
+
+  const photo = d.photo_url || d.photo || d.users?.profile_picture || null;
 
   return {
-    id: row.id,
-    user_id: row.id,
-    full_name: row.full_name,
-    bio: row.bio,
-    experience_years: Number(row.experience_years) || 0,
-    consultation_fee: String(row.consultation_fee || 0),
-    photo: row.photo_url || null,
-    specialist_id: row.specialist_id,
-    is_active: Boolean(row.is_active),
-    created_at: row.created_at,
-    updated_at: row.updated_at,
+    id: d.id,
+    user_id: d.user_id || d.id,
+    full_name: d.full_name || d.users?.full_name || 'Dokter',
+    bio: d.bio ?? d.description ?? null,
+    experience_years: Number(d.experience_years) || 0,
+    consultation_fee: String(d.consultation_fee || 0),
+    photo,
+    specialist_id: d.specialist_id,
+    is_active: Boolean(d.is_active ?? true),
+    created_at: d.created_at,
+    updated_at: d.updated_at,
     users: {
-      id: row.id,
-      email: '',
-      full_name: row.full_name,
-      phone_number: null,
-      profile_picture: row.photo_url || null,
+      id: d.user_id || d.id,
+      email: d.users?.email || '',
+      full_name: d.full_name || d.users?.full_name || '',
+      phone_number: d.users?.phone_number || null,
+      profile_picture: photo,
     },
-    specialists: row.specialists
+    specialists: d.specialists
       ? {
-          id: row.specialists.id,
-          name: row.specialists.name,
+          id: d.specialists.id,
+          name: d.specialists.name,
         }
       : null,
     doctor_schedules: schedules,
     rating_avg: ratingAvg,
     rating_count: ratingCount,
-    reviews: ratings.map((r: any) => ({
-      id: r.id,
-      rating: r.rating,
-      review: r.review,
-      created_at: r.created_at,
-      patient_profiles: {
-        users: {
-          full_name: r.profiles?.full_name || 'Pasien',
-        },
-      },
-    })),
+    reviews: Array.isArray(d.reviews)
+      ? d.reviews
+      : ratings.map((r: any) => ({
+          id: r.id,
+          rating: r.rating,
+          review: r.review,
+          created_at: r.created_at,
+          patient_profiles: {
+            users: {
+              full_name: r.profiles?.full_name || r.patient_profiles?.users?.full_name || 'Pasien',
+            },
+          },
+        })),
   };
 }
 
@@ -108,72 +116,28 @@ export const useGetDoctors = (
     ],
     placeholderData: keepPreviousData,
     queryFn: async () => {
-      const supabase = createClient();
-      let query = supabase.from('doctors').select(
-        `
-        *,
-        specialists (id, name),
-        doctor_schedules (*),
-        ratings (*, profiles:patient_id (full_name))
-      `,
-        { count: 'exact' },
-      );
+      const params: any = { page, limit };
+      if (search) params.search = search;
+      if (typeof is_active === 'boolean') params.is_active = is_active;
+      if (sort) params.sort = sort;
+      if (specialist_id && specialist_id !== 'all') params.specialist_id = specialist_id;
+      if (typeof min_fee === 'number') params.min_fee = min_fee;
+      if (typeof max_fee === 'number') params.max_fee = max_fee;
+      if (typeof day_of_week === 'number') params.day_of_week = day_of_week;
 
-      if (typeof is_active === 'boolean') {
-        query = query.eq('is_active', is_active);
-      }
-      if (specialist_id && specialist_id !== 'all') {
-        query = query.eq('specialist_id', specialist_id);
-      }
-      if (search) {
-        query = query.ilike('full_name', `%${search}%`);
-      }
-      if (typeof min_fee === 'number') {
-        query = query.gte('consultation_fee', min_fee);
-      }
-      if (typeof max_fee === 'number') {
-        query = query.lte('consultation_fee', max_fee);
-      }
-
-      // Sort
-      if (sort === 'fee_asc') {
-        query = query.order('consultation_fee', { ascending: true });
-      } else if (sort === 'fee_desc') {
-        query = query.order('consultation_fee', { ascending: false });
-      } else if (sort === 'experience_desc') {
-        query = query.order('experience_years', { ascending: false });
-      } else {
-        query = query.order('created_at', { ascending: false });
-      }
-
-      const from = (page - 1) * limit;
-      const to = from + limit - 1;
-
-      const { data, count, error } = await query.range(from, to);
-
-      if (error) throw new Error(error.message);
-
-      let items = (data || []).map(mapDoctorRow);
-
-      // Filter by day_of_week if specified
-      if (typeof day_of_week === 'number') {
-        items = items.filter((d) =>
-          d.doctor_schedules.some((s) => s.day_of_week === day_of_week),
-        );
-      }
-
-      const totalItems = count || items.length;
-      const totalPages = Math.ceil(totalItems / limit) || 1;
+      const res = await apiClient.get<TPaginateResponse<any>>('/doctors', { params });
+      const rawList = res.data.data || [];
+      const items = rawList.map(normalizeDoctor);
 
       return {
-        success: true as const,
-        message: 'Daftar dokter berhasil dimuat',
+        success: true,
+        message: res.data.message || 'Daftar dokter berhasil dimuat',
         data: items,
-        meta: {
+        meta: res.data.meta || {
           page,
           limit,
-          total: totalItems,
-          total_pages: totalPages,
+          total: items.length,
+          total_pages: Math.ceil(items.length / limit) || 1,
         },
       };
     },
@@ -186,28 +150,11 @@ export const useGetDetailDoctor = (id?: string) => {
     enabled: Boolean(id),
     queryKey: ['get-detail-doctor', id],
     queryFn: async () => {
-      const supabase = createClient();
-      const { data, error } = await supabase
-        .from('doctors')
-        .select(
-          `
-          *,
-          specialists (id, name),
-          doctor_schedules (*),
-          ratings (*, profiles:patient_id (full_name))
-        `,
-        )
-        .eq('id', id)
-        .single();
-
-      if (error || !data) {
-        throw new Error(error?.message || 'Dokter tidak ditemukan');
-      }
-
+      const res = await apiClient.get<TApiSuccessResponse<any>>(`/doctors/${id}`);
       return {
-        success: true as const,
-        message: 'Detail dokter berhasil dimuat',
-        data: mapDoctorRow(data),
+        success: true,
+        message: res.data.message || 'Detail dokter berhasil dimuat',
+        data: normalizeDoctor(res.data.data),
       };
     },
   });
@@ -222,34 +169,20 @@ export const useCreateDoctor = ({
   return useMutation({
     mutationKey: ['create-doctor'],
     mutationFn: async (body: TDoctorCreate) => {
-      const supabase = createClient();
-      const { data, error } = await supabase
-        .from('doctors')
-        .insert({
-          full_name: body.full_name,
-          bio: body.bio || null,
-          experience_years: body.experience_years || 0,
-          consultation_fee: body.consultation_fee || 0,
-          photo_url: body.photo || (body as any).photo_url || null,
-          specialist_id: body.specialist_id || null,
-          is_active: body.is_active ?? true,
-        })
-        .select(
-          `
-          *,
-          specialists (id, name),
-          doctor_schedules (*),
-          ratings (*)
-        `,
-        )
-        .single();
-
-      if (error) throw new Error(error.message);
+      const res = await apiClient.post<TApiSuccessResponse<any>>('/doctors', {
+        full_name: body.full_name,
+        bio: body.bio || undefined,
+        experience_years: Number(body.experience_years) || 0,
+        consultation_fee: Number(body.consultation_fee) || 0,
+        photo_url: body.photo || (body as any).photo_url || undefined,
+        specialist_id: body.specialist_id || undefined,
+        is_active: body.is_active ?? true,
+      });
 
       return {
         success: true as const,
-        message: 'Dokter berhasil ditambahkan',
-        data: mapDoctorRow(data),
+        message: res.data.message || 'Dokter berhasil ditambahkan',
+        data: normalizeDoctor(res.data.data),
       };
     },
     onSuccess: (response) => {
@@ -269,38 +202,22 @@ export const useUpdateDoctor = ({
   return useMutation({
     mutationKey: ['update-doctor'],
     mutationFn: async ({ id, body }: { id: string; body: TDoctorUpdate }) => {
-      const supabase = createClient();
-      const updates: any = {};
-      if (body.full_name !== undefined) updates.full_name = body.full_name;
-      if (body.bio !== undefined) updates.bio = body.bio;
-      if (body.experience_years !== undefined) updates.experience_years = body.experience_years;
-      if (body.consultation_fee !== undefined) updates.consultation_fee = body.consultation_fee;
+      const payload: any = {};
+      if (body.full_name !== undefined) payload.full_name = body.full_name;
+      if (body.bio !== undefined) payload.bio = body.bio;
+      if (body.experience_years !== undefined) payload.experience_years = Number(body.experience_years);
+      if (body.consultation_fee !== undefined) payload.consultation_fee = Number(body.consultation_fee);
       if (body.photo !== undefined || (body as any).photo_url !== undefined) {
-        updates.photo_url = body.photo || (body as any).photo_url || null;
+        payload.photo_url = body.photo || (body as any).photo_url;
       }
-      if (body.specialist_id !== undefined) updates.specialist_id = body.specialist_id;
-      if (body.is_active !== undefined) updates.is_active = body.is_active;
+      if (body.specialist_id !== undefined) payload.specialist_id = body.specialist_id;
+      if (body.is_active !== undefined) payload.is_active = body.is_active;
 
-      const { data, error } = await supabase
-        .from('doctors')
-        .update(updates)
-        .eq('id', id)
-        .select(
-          `
-          *,
-          specialists (id, name),
-          doctor_schedules (*),
-          ratings (*)
-        `,
-        )
-        .single();
-
-      if (error) throw new Error(error.message);
-
+      const res = await apiClient.patch<TApiSuccessResponse<any>>(`/doctors/${id}`, payload);
       return {
         success: true as const,
-        message: 'Dokter berhasil diperbarui',
-        data: mapDoctorRow(data),
+        message: res.data.message || 'Dokter berhasil diperbarui',
+        data: normalizeDoctor(res.data.data),
       };
     },
     onSuccess: (response, { id }) => {
@@ -312,7 +229,7 @@ export const useUpdateDoctor = ({
   });
 };
 
-// POST /doctors/photo (upload to Supabase Storage avatars/photos)
+// POST /doctors/photo
 export const useUploadDoctorPhoto = ({
   onError,
   onSuccess,
@@ -320,27 +237,17 @@ export const useUploadDoctorPhoto = ({
   return useMutation({
     mutationKey: ['upload-doctor-photo'],
     mutationFn: async (file: File) => {
-      const supabase = createClient();
-      const fileExt = file.name.split('.').pop() || 'jpg';
-      const fileName = `doctors/${Date.now()}-${Math.random().toString(36).slice(2, 7)}.${fileExt}`;
+      const formData = new FormData();
+      formData.append('photo', file);
 
-      const { error: uploadError } = await supabase.storage
-        .from('avatars')
-        .upload(fileName, file, { upsert: true });
-
-      if (uploadError) {
-        throw new Error(uploadError.message);
-      }
-
-      const { data: publicUrlData } = supabase.storage
-        .from('avatars')
-        .getPublicUrl(fileName);
-
-      return {
-        success: true as const,
-        message: 'Foto berhasil diunggah',
-        data: { url: publicUrlData.publicUrl },
-      };
+      const res = await apiClient.post<TApiSuccessResponse<{ url: string }>>(
+        '/doctors/photo',
+        formData,
+        {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        },
+      );
+      return res.data;
     },
     onSuccess: (response) => onSuccess?.(response),
     onError: (error) => onError?.(error as TApiError),
@@ -356,15 +263,8 @@ export const useDeleteDoctor = ({
   return useMutation({
     mutationKey: ['delete-doctor'],
     mutationFn: async (id: string) => {
-      const supabase = createClient();
-      const { error } = await supabase.from('doctors').delete().eq('id', id);
-      if (error) throw new Error(error.message);
-
-      return {
-        success: true as const,
-        message: 'Dokter berhasil dihapus',
-        data: {},
-      };
+      const res = await apiClient.delete<TApiSuccessResponse<Record<string, never>>>(`/doctors/${id}`);
+      return res.data;
     },
     onSuccess: (response) => {
       queryClient.invalidateQueries({ queryKey: ['get-doctors'] });

@@ -4,7 +4,7 @@ import {
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query';
-import { createClient } from '@/lib/supabase/client';
+import { apiClient } from '@/lib/api-client';
 import { compressImageToBase64 } from '@/lib/image-compression';
 import type {
   TApiError,
@@ -21,7 +21,7 @@ import type {
   TTransactionStatus,
 } from '@/types/appointment';
 
-function mapToPatientAppointment(row: any, publicUrlBase: string): TAppointment {
+function normalizePatientAppointment(row: any, publicUrlBase: string): TAppointment {
   const doctor = row.doctors || {};
   const session = row.practice_sessions || {};
   const fee = Number(row.consultation_fee) || 0;
@@ -30,14 +30,12 @@ function mapToPatientAppointment(row: any, publicUrlBase: string): TAppointment 
   const remainingSeconds = Math.max(0, Math.floor((deadline - now) / 1000));
 
   let proofUrl = '';
-  if (row.payment_proof_path) {
-    if (
-      row.payment_proof_path.startsWith('data:image') ||
-      row.payment_proof_path.startsWith('http')
-    ) {
-      proofUrl = row.payment_proof_path;
+  const proofPath = row.payment_proof_path || row.payment_proofs?.[0]?.image_url;
+  if (proofPath) {
+    if (proofPath.startsWith('data:image') || proofPath.startsWith('http')) {
+      proofUrl = proofPath;
     } else {
-      proofUrl = `${publicUrlBase}/storage/v1/object/public/payment-proofs/${row.payment_proof_path}`;
+      proofUrl = `${publicUrlBase}/storage/v1/object/public/payment-proofs/${proofPath}`;
     }
   }
 
@@ -45,7 +43,7 @@ function mapToPatientAppointment(row: any, publicUrlBase: string): TAppointment 
 
   return {
     id: row.id,
-    appointment_code: row.code || `APT-${row.id.slice(0, 8)}`,
+    appointment_code: row.appointment_code || row.code || `APT-${row.id.slice(0, 8)}`,
     consultation_fee: String(fee),
     treatment_fee: '0',
     discount_amount: '0',
@@ -70,7 +68,7 @@ function mapToPatientAppointment(row: any, publicUrlBase: string): TAppointment 
     doctors: {
       id: doctor.id || row.doctor_id,
       full_name: doctor.full_name || 'Dokter',
-      photo: doctor.photo_url || null,
+      photo: doctor.photo_url || doctor.photo || null,
     },
     treatments: {
       id: 'general',
@@ -83,7 +81,7 @@ function mapToPatientAppointment(row: any, publicUrlBase: string): TAppointment 
       start_time: session.start_time || '08:00',
       end_time: session.end_time || '12:00',
     },
-    payment_proofs: row.payment_proof_path
+    payment_proofs: proofUrl
       ? [
           {
             id: row.id,
@@ -102,36 +100,33 @@ function mapToPatientAppointment(row: any, publicUrlBase: string): TAppointment 
   };
 }
 
-// GET /appointments/availability
+// GET /appointments/availability?doctor_id=...&date=...
 export const useGetAvailability = (doctorId?: string, date?: string) => {
   return useQuery<TApiSuccessResponse<TAvailability>>({
     enabled: Boolean(doctorId) && Boolean(date),
     queryKey: ['get-availability', doctorId, date],
     staleTime: 0,
     queryFn: async () => {
-      const supabase = createClient();
-      const { data, error } = await supabase.rpc('get_availability', {
-        p_doctor_id: doctorId,
-        p_date: date,
+      const res = await apiClient.get<TApiSuccessResponse<any>>('/appointments/availability', {
+        params: { doctor_id: doctorId, date },
       });
 
-      if (error) {
-        throw new Error(error.message);
-      }
+      const raw = res.data.data;
+      const rawSlots = Array.isArray(raw) ? raw : raw?.slots || [];
 
-      const slots: TSlot[] = (data || []).map((slot: any) => ({
+      const slots: TSlot[] = rawSlots.map((slot: any) => ({
         schedule_id: slot.schedule_id || slot.id,
         start_time: (slot.start_time || '').slice(0, 5),
         end_time: (slot.end_time || '').slice(0, 5),
-        quota: Number(slot.quota) || 0,
+        quota: Number(slot.quota || slot.patient_quota) || 0,
         booked: Number(slot.booked) || 0,
         remaining: Number(slot.remaining) || 0,
-        available: Boolean(slot.available),
+        available: Boolean(slot.is_available ?? slot.available),
       }));
 
       return {
-        success: true as const,
-        message: 'Ketersediaan jadwal berhasil dimuat',
+        success: true,
+        message: res.data.message || 'Ketersediaan jadwal berhasil dimuat',
         data: {
           doctor_id: doctorId || '',
           date: date || '',
@@ -150,54 +145,23 @@ export const useGetMyAppointments = ({ page = 1, limit = 10 } = {}, enabled = tr
     placeholderData: keepPreviousData,
     staleTime: 0,
     queryFn: async () => {
-      const supabase = createClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user) {
-        throw new Error('Sesi Anda telah berakhir, silakan masuk kembali');
-      }
-
-      const from = (page - 1) * limit;
-      const to = from + limit - 1;
-
-      const { data, count, error } = await supabase
-        .from('appointments')
-        .select(
-          `
-          *,
-          doctors (id, full_name, photo_url),
-          practice_sessions (id, session_date, start_time, end_time),
-          ratings (*)
-        `,
-          { count: 'exact' },
-        )
-        .eq('patient_id', user.id)
-        .order('created_at', { ascending: false })
-        .range(from, to);
-
-      if (error) {
-        throw new Error(error.message);
-      }
+      const res = await apiClient.get<TPaginateResponse<any>>('/appointments/me', {
+        params: { page, limit },
+      });
 
       const publicUrlBase = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-      const totalItems = count || 0;
-      const totalPages = Math.ceil(totalItems / limit) || 1;
-
-      const items = (data || []).map((row: any) =>
-        mapToPatientAppointment(row, publicUrlBase),
-      );
+      const rawItems = res.data.data || [];
+      const items = rawItems.map((row: any) => normalizePatientAppointment(row, publicUrlBase));
 
       return {
-        success: true as const,
-        message: 'Riwayat reservasi berhasil dimuat',
+        success: true,
+        message: res.data.message || 'Riwayat reservasi berhasil dimuat',
         data: items,
-        meta: {
+        meta: res.data.meta || {
           page,
           limit,
-          total: totalItems,
-          total_pages: totalPages,
+          total: items.length,
+          total_pages: Math.ceil(items.length / limit) || 1,
         },
       };
     },
@@ -212,37 +176,20 @@ export const useGetAppointment = (id?: string) => {
     staleTime: 0,
     retry: false,
     queryFn: async () => {
-      const supabase = createClient();
-      const { data, error } = await supabase
-        .from('appointments')
-        .select(
-          `
-          *,
-          doctors (id, full_name, photo_url),
-          practice_sessions (id, session_date, start_time, end_time),
-          ratings (*)
-        `,
-        )
-        .eq('id', id)
-        .single();
-
-      if (error || !data) {
-        throw new Error(error?.message || 'Janji temu tidak ditemukan');
-      }
-
+      const res = await apiClient.get<TApiSuccessResponse<any>>(`/appointments/${id}`);
       const publicUrlBase = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-      const mapped = mapToPatientAppointment(data, publicUrlBase);
+      const mapped = normalizePatientAppointment(res.data.data, publicUrlBase);
 
       return {
-        success: true as const,
-        message: 'Janji temu berhasil dimuat',
+        success: true,
+        message: res.data.message || 'Janji temu berhasil dimuat',
         data: mapped,
       };
     },
   });
 };
 
-// POST /appointments — menahan 1 kuota selama 30 menit
+// POST /appointments — buat janji temu
 export const useCreateAppointment = ({
   onError,
   onSuccess,
@@ -251,73 +198,21 @@ export const useCreateAppointment = ({
   return useMutation({
     mutationKey: ['create-appointment'],
     mutationFn: async (body: TAppointmentCreate) => {
-      const supabase = createClient();
-      let scheduleId = body.schedule_id;
+      const startTimeFormatted = (body.start_time || '').slice(0, 5);
 
-      if (!scheduleId) {
-        const [year, month, day] = body.session_date.split('-').map(Number);
-        const dayOfWeek = new Date(year, month - 1, day).getDay();
-
-        const startTimeFormatted =
-          body.start_time.length === 5 ? `${body.start_time}:00` : body.start_time;
-
-        const { data: schedule, error: schedError } = await supabase
-          .from('doctor_schedules')
-          .select('id')
-          .eq('doctor_id', body.doctor_id)
-          .eq('day_of_week', dayOfWeek)
-          .eq('start_time', startTimeFormatted)
-          .maybeSingle();
-
-        if (schedError || !schedule) {
-          throw new Error(
-            'Jadwal praktik dokter tidak ditemukan pada hari dan jam tersebut.',
-          );
-        }
-        scheduleId = schedule.id;
-      }
-
-      const { data: appointmentId, error: bookError } = await supabase.rpc(
-        'book_appointment',
-        {
-          p_schedule_id: scheduleId,
-          p_date: body.session_date,
-        },
-      );
-
-      if (bookError) {
-        throw new Error(bookError.message);
-      }
-
-      // Ambil appointment lengkap
-      const createdId =
-        typeof appointmentId === 'object' && appointmentId !== null
-          ? (appointmentId as any).id
-          : appointmentId;
-
-      const { data: fullAppointment, error: fetchError } = await supabase
-        .from('appointments')
-        .select(
-          `
-          *,
-          doctors (id, full_name, photo_url),
-          practice_sessions (id, session_date, start_time, end_time),
-          ratings (*)
-        `,
-        )
-        .eq('id', createdId)
-        .single();
-
-      if (fetchError || !fullAppointment) {
-        throw new Error('Gagal memuat janji temu yang baru dibuat');
-      }
+      const res = await apiClient.post<TApiSuccessResponse<any>>('/appointments', {
+        doctor_id: body.doctor_id,
+        session_date: body.session_date,
+        start_time: startTimeFormatted,
+        treatment_slug: body.treatment_slug || 'acne-dermapeel',
+      });
 
       const publicUrlBase = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-      const mapped = mapToPatientAppointment(fullAppointment, publicUrlBase);
+      const mapped = normalizePatientAppointment(res.data.data, publicUrlBase);
 
       return {
         success: true as const,
-        message: 'Reservasi berhasil dibuat',
+        message: res.data.message || 'Reservasi berhasil dibuat',
         data: mapped,
       };
     },
@@ -339,80 +234,41 @@ export const useUploadPaymentProof = ({
   const queryClient = useQueryClient();
   return useMutation({
     mutationKey: ['upload-payment-proof'],
-    mutationFn: async ({ id, file }: { id: string; file: File }) => {
-      const supabase = createClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user) {
-        throw new Error('Sesi Anda telah berakhir, silakan masuk kembali');
-      }
-
-      // 1. Kompres gambar ke format JPEG Base64 ringan (~50-100 KB)
-      let payloadPath = '';
+    mutationFn: async (payloadInput: { id: string; file: File }): Promise<TApiSuccessResponse<TAppointment>> => {
+      const { id, file } = payloadInput;
+      let base64String = '';
       try {
-        payloadPath = await compressImageToBase64(file, 1024, 1024, 0.75);
-      } catch (err) {
-        console.warn('Gagal kompresi canvas:', err);
-      }
+        base64String = await compressImageToBase64(file, 1024, 1024, 0.75);
+      } catch {}
 
-      // 2. Jika kompresi canvas tidak didukung, fallback ke Supabase Storage
-      if (!payloadPath) {
-        const fileExt = file.name.split('.').pop() || 'jpg';
-        const storagePath = `${user.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${fileExt}`;
-
-        const { error: uploadError } = await supabase.storage
-          .from('payment-proofs')
-          .upload(storagePath, file, { upsert: true });
-
-        if (uploadError) {
-          throw new Error(`Gagal mengunggah bukti bayar: ${uploadError.message}`);
-        }
-        payloadPath = storagePath;
+      let res;
+      if (base64String) {
+        // Kirim via JSON payload Base64
+        res = await apiClient.post<TApiSuccessResponse<any>>(
+          `/appointments/${id}/payment-proof`,
+          {
+            image_base64: base64String,
+          },
+        );
       } else {
-        // Coba upload file ke storage bucket sebagai backup jika aktif
-        try {
-          const fileExt = 'jpg';
-          const storagePath = `${user.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${fileExt}`;
-          await supabase.storage.from('payment-proofs').upload(storagePath, file, { upsert: true });
-        } catch {
-          // Abaikan error storage karena Base64 sudah ada
-        }
-      }
-
-      const { error: rpcError } = await supabase.rpc('submit_payment_proof', {
-        p_appointment_id: id,
-        p_path: payloadPath,
-      });
-
-      if (rpcError) {
-        throw new Error(rpcError.message);
-      }
-
-      const { data: updatedAppointment, error: fetchError } = await supabase
-        .from('appointments')
-        .select(
-          `
-          *,
-          doctors (id, full_name, photo_url),
-          practice_sessions (id, session_date, start_time, end_time),
-          ratings (*)
-        `,
-        )
-        .eq('id', id)
-        .single();
-
-      if (fetchError || !updatedAppointment) {
-        throw new Error('Gagal memuat janji temu setelah unggah bukti');
+        // Fallback kirim via multipart/form-data
+        const formData = new FormData();
+        formData.append('image', file);
+        res = await apiClient.post<TApiSuccessResponse<any>>(
+          `/appointments/${id}/payment-proof`,
+          formData,
+          {
+            headers: { 'Content-Type': 'multipart/form-data' },
+          },
+        );
       }
 
       const publicUrlBase = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-      const mapped = mapToPatientAppointment(updatedAppointment, publicUrlBase);
+      const mapped = normalizePatientAppointment(res.data.data, publicUrlBase);
 
       return {
         success: true as const,
-        message: 'Bukti pembayaran berhasil diunggah',
+        message: res.data.message || 'Bukti pembayaran berhasil diunggah',
         data: mapped,
       };
     },
@@ -433,39 +289,14 @@ export const useCancelAppointment = ({
   const queryClient = useQueryClient();
   return useMutation({
     mutationKey: ['cancel-appointment'],
-    mutationFn: async (id: string) => {
-      const supabase = createClient();
-      const { error: rpcError } = await supabase.rpc('cancel_appointment', {
-        p_appointment_id: id,
-      });
-
-      if (rpcError) {
-        throw new Error(rpcError.message);
-      }
-
-      const { data: updatedAppointment, error: fetchError } = await supabase
-        .from('appointments')
-        .select(
-          `
-          *,
-          doctors (id, full_name, photo_url),
-          practice_sessions (id, session_date, start_time, end_time),
-          ratings (*)
-        `,
-        )
-        .eq('id', id)
-        .single();
-
-      if (fetchError || !updatedAppointment) {
-        throw new Error('Gagal memuat janji temu setelah dibatalkan');
-      }
-
+    mutationFn: async (id: string): Promise<TApiSuccessResponse<TAppointment>> => {
+      const res = await apiClient.patch<TApiSuccessResponse<any>>(`/appointments/${id}/cancel`);
       const publicUrlBase = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-      const mapped = mapToPatientAppointment(updatedAppointment, publicUrlBase);
+      const mapped = normalizePatientAppointment(res.data.data, publicUrlBase);
 
       return {
         success: true as const,
-        message: 'Reservasi berhasil dibatalkan',
+        message: res.data.message || 'Reservasi berhasil dibatalkan',
         data: mapped,
       };
     },
@@ -487,41 +318,18 @@ export const useRateAppointment = ({
   const queryClient = useQueryClient();
   return useMutation({
     mutationKey: ['rate-appointment'],
-    mutationFn: async ({ id, body }: { id: string; body: TRatingCreate }) => {
-      const supabase = createClient();
-      const { error: rpcError } = await supabase.rpc('rate_appointment', {
-        p_appointment_id: id,
-        p_rating: body.rating,
-        p_review: body.review || null,
+    mutationFn: async ({ id, body }: { id: string; body: TRatingCreate }): Promise<TApiSuccessResponse<TAppointment>> => {
+      const res = await apiClient.post<TApiSuccessResponse<any>>(`/appointments/${id}/rating`, {
+        rating: body.rating,
+        review: body.review || undefined,
       });
 
-      if (rpcError) {
-        throw new Error(rpcError.message);
-      }
-
-      const { data: updatedAppointment, error: fetchError } = await supabase
-        .from('appointments')
-        .select(
-          `
-          *,
-          doctors (id, full_name, photo_url),
-          practice_sessions (id, session_date, start_time, end_time),
-          ratings (*)
-        `,
-        )
-        .eq('id', id)
-        .single();
-
-      if (fetchError || !updatedAppointment) {
-        throw new Error('Gagal memuat janji temu setelah memberikan ulasan');
-      }
-
       const publicUrlBase = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-      const mapped = mapToPatientAppointment(updatedAppointment, publicUrlBase);
+      const mapped = normalizePatientAppointment(res.data.data, publicUrlBase);
 
       return {
         success: true as const,
-        message: 'Ulasan berhasil disimpan',
+        message: res.data.message || 'Ulasan berhasil disimpan',
         data: mapped,
       };
     },

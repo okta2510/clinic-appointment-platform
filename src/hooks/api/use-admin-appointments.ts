@@ -4,7 +4,7 @@ import {
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query';
-import { createClient } from '@/lib/supabase/client';
+import { apiClient } from '@/lib/api-client';
 import type {
   TApiError,
   TApiSuccessResponse,
@@ -22,28 +22,26 @@ type TAdminAppointmentIndex = {
   limit?: number;
 };
 
-// Helper memetakan baris database Supabase ke bentuk TAdminAppointment
-function mapToAdminAppointment(row: any, publicUrlBase: string): TAdminAppointment {
-  const profile = row.profiles || {};
+// Helper memetakan data janji temu admin
+function normalizeAdminAppointment(row: any, publicUrlBase: string): TAdminAppointment {
+  const profile = row.profiles || row.patient_profiles?.users || {};
   const doctor = row.doctors || {};
   const session = row.practice_sessions || {};
   const fee = Number(row.consultation_fee) || 0;
 
   let proofUrl = '';
-  if (row.payment_proof_path) {
-    if (
-      row.payment_proof_path.startsWith('data:image') ||
-      row.payment_proof_path.startsWith('http')
-    ) {
-      proofUrl = row.payment_proof_path;
+  const proofPath = row.payment_proof_path || row.payment_proofs?.[0]?.image_url;
+  if (proofPath) {
+    if (proofPath.startsWith('data:image') || proofPath.startsWith('http')) {
+      proofUrl = proofPath;
     } else {
-      proofUrl = `${publicUrlBase}/storage/v1/object/public/payment-proofs/${row.payment_proof_path}`;
+      proofUrl = `${publicUrlBase}/storage/v1/object/public/payment-proofs/${proofPath}`;
     }
   }
 
   return {
     id: row.id,
-    appointment_code: row.code || `APT-${row.id.slice(0, 8)}`,
+    appointment_code: row.appointment_code || row.code || `APT-${row.id.slice(0, 8)}`,
     consultation_fee: String(fee),
     treatment_fee: '0',
     discount_amount: '0',
@@ -55,12 +53,12 @@ function mapToAdminAppointment(row: any, publicUrlBase: string): TAdminAppointme
     doctors: {
       id: doctor.id || row.doctor_id,
       full_name: doctor.full_name || 'Dokter',
-      photo: doctor.photo_url || null,
+      photo: doctor.photo_url || doctor.photo || null,
     },
     treatments: {
       id: 'general',
-      slug: null,
-      name: 'Konsultasi Dokter',
+      slug: row.treatment_slug || null,
+      name: 'Konsultasi Dokter & Treatment',
     },
     practice_sessions: {
       id: session.id || row.session_id,
@@ -68,7 +66,7 @@ function mapToAdminAppointment(row: any, publicUrlBase: string): TAdminAppointme
       start_time: session.start_time || '08:00',
       end_time: session.end_time || '12:00',
     },
-    payment_proofs: row.payment_proof_path
+    payment_proofs: proofUrl
       ? [
           {
             id: row.id,
@@ -110,53 +108,33 @@ export const useGetAdminAppointments = ({
     placeholderData: keepPreviousData,
     staleTime: 5000,
     queryFn: async () => {
-      const supabase = createClient();
-      const urlBase = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+      const params: any = { page, limit };
+      if (status) params.status = status;
+      if (session_id) params.session_id = session_id;
+      if (doctor_id) params.doctor_id = doctor_id;
+      if (date) params.date = date;
 
-      let query = supabase
-        .from('appointments')
-        .select(
-          `
-          *,
-          profiles:patient_id (id, full_name, phone_number),
-          doctors:doctor_id (id, full_name, photo_url),
-          practice_sessions:session_id (id, session_date, start_time, end_time, starts_at, ends_at)
-        `,
-          { count: 'exact' },
-        );
-
-      if (status) query = query.eq('status', status);
-      if (session_id) query = query.eq('session_id', session_id);
-      if (doctor_id) query = query.eq('doctor_id', doctor_id);
-
-      const from = (page - 1) * limit;
-      const to = from + limit - 1;
-
-      const { data, count, error } = await query
-        .order('created_at', { ascending: false })
-        .range(from, to);
-
-      if (error) throw error;
-
-      const items = (data || []).map((row) => mapToAdminAppointment(row, urlBase));
-      const total = count || 0;
+      const res = await apiClient.get<TPaginateResponse<any>>('/admin/appointments', { params });
+      const publicUrlBase = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+      const rawList = res.data.data || [];
+      const items = rawList.map((row) => normalizeAdminAppointment(row, publicUrlBase));
 
       return {
-        success: true as const,
-        message: 'Daftar janji temu berhasil dimuat',
+        success: true,
+        message: res.data.message || 'Daftar janji temu berhasil dimuat',
         data: items,
-        meta: {
+        meta: res.data.meta || {
           page,
           limit,
-          total,
-          total_pages: Math.ceil(total / limit) || 1,
+          total: items.length,
+          total_pages: Math.ceil(items.length / limit) || 1,
         },
       };
     },
   });
 };
 
-// RPC approve_appointment — status done, terbit QR token
+// PATCH /admin/appointments/:id/approve — setujui pembayaran pasien
 export const useApproveAppointment = ({
   onError,
   onSuccess,
@@ -165,29 +143,20 @@ export const useApproveAppointment = ({
   return useMutation({
     mutationKey: ['approve-appointment'],
     mutationFn: async (id: string) => {
-      const supabase = createClient();
-      const { data, error } = await supabase.rpc('approve_appointment', {
-        p_appointment_id: id,
-      });
-
-      if (error) throw error;
-
-      return {
-        success: true as const,
-        message: 'Janji temu berhasil disetujui',
-        data: data as any,
-      };
+      const res = await apiClient.patch<TApiSuccessResponse<any>>(`/admin/appointments/${id}/approve`);
+      return res.data;
     },
     onSuccess: (response) => {
       queryClient.invalidateQueries({ queryKey: ['get-admin-appointments'] });
       queryClient.invalidateQueries({ queryKey: ['admin-dashboard-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['live-queue'] });
       onSuccess?.(response);
     },
     onError: (error) => onError?.(error as TApiError),
   });
 };
 
-// RPC reject_appointment — tolak bukti bayar, kuota dipulihkan
+// PATCH /admin/appointments/:id/reject — tolak bukti bayar
 export const useRejectAppointment = ({
   onError,
   onSuccess,
@@ -196,19 +165,10 @@ export const useRejectAppointment = ({
   return useMutation({
     mutationKey: ['reject-appointment'],
     mutationFn: async ({ id, reason }: { id: string; reason: string }) => {
-      const supabase = createClient();
-      const { data, error } = await supabase.rpc('reject_appointment', {
-        p_appointment_id: id,
-        p_reason: reason,
+      const res = await apiClient.patch<TApiSuccessResponse<any>>(`/admin/appointments/${id}/reject`, {
+        reason,
       });
-
-      if (error) throw error;
-
-      return {
-        success: true as const,
-        message: 'Janji temu berhasil ditolak',
-        data: data as any,
-      };
+      return res.data;
     },
     onSuccess: (response) => {
       queryClient.invalidateQueries({ queryKey: ['get-admin-appointments'] });
@@ -219,7 +179,7 @@ export const useRejectAppointment = ({
   });
 };
 
-// RPC check_in — scan QR pasien hari H
+// POST /admin/queue/check-in — scan QR pasien hari H
 export const useCheckIn = ({
   onError,
   onSuccess,
@@ -228,25 +188,17 @@ export const useCheckIn = ({
   return useMutation({
     mutationKey: ['check-in'],
     mutationFn: async (qrToken: string) => {
-      const supabase = createClient();
       let clean = qrToken.trim();
       if (clean.includes(':')) {
         const parts = clean.split(':');
         clean = (parts[1] || parts[0]).trim();
       }
-      const { data, error } = await supabase.rpc('check_in', {
-        p_qr_token: clean,
+
+      const res = await apiClient.post<TApiSuccessResponse<any>>('/admin/queue/check-in', {
+        token: clean,
       });
 
-      if (error) throw error;
-
-      const resData = (typeof data === 'object' && data !== null) ? data : {};
-
-      return {
-        success: true as const,
-        message: resData.message || 'Pasien berhasil diproses',
-        data: resData,
-      };
+      return res.data;
     },
     onSuccess: (response) => {
       queryClient.invalidateQueries({ queryKey: ['get-admin-appointments'] });
@@ -258,7 +210,7 @@ export const useCheckIn = ({
   });
 };
 
-// RPC call_next — panggil nomor antrean berikutnya
+// PATCH /admin/queue/call-next — panggil nomor antrean berikutnya
 export const useCallNext = ({
   onError,
   onSuccess,
@@ -267,18 +219,10 @@ export const useCallNext = ({
   return useMutation({
     mutationKey: ['call-next'],
     mutationFn: async (sessionId: string) => {
-      const supabase = createClient();
-      const { data, error } = await supabase.rpc('call_next', {
-        p_session_id: sessionId,
+      const res = await apiClient.patch<TApiSuccessResponse<any>>('/admin/queue/call-next', {
+        session_id: sessionId,
       });
-
-      if (error) throw error;
-
-      return {
-        success: true as const,
-        message: 'Nomor antrean berhasil dipanggil',
-        data,
-      };
+      return res.data;
     },
     onSuccess: (response) => {
       queryClient.invalidateQueries({ queryKey: ['live-queue'] });
@@ -289,7 +233,7 @@ export const useCallNext = ({
   });
 };
 
-// RPC mark_no_show — tandai tidak hadir
+// PATCH /admin/queue/no-show/:id — tandai tidak hadir
 export const useMarkNoShow = ({
   onError,
   onSuccess,
@@ -298,18 +242,8 @@ export const useMarkNoShow = ({
   return useMutation({
     mutationKey: ['mark-no-show'],
     mutationFn: async (appointmentId: string) => {
-      const supabase = createClient();
-      const { data, error } = await supabase.rpc('mark_no_show', {
-        p_appointment_id: appointmentId,
-      });
-
-      if (error) throw error;
-
-      return {
-        success: true as const,
-        message: 'Pasien berhasil ditandai tidak hadir',
-        data,
-      };
+      const res = await apiClient.patch<TApiSuccessResponse<any>>(`/admin/queue/no-show/${appointmentId}`);
+      return res.data;
     },
     onSuccess: (response) => {
       queryClient.invalidateQueries({ queryKey: ['get-admin-appointments'] });
@@ -320,21 +254,19 @@ export const useMarkNoShow = ({
   });
 };
 
-// RPC get_live_queue — data antrean langsung hari ini (publik)
+// GET /queue/live — data antrean langsung hari ini (publik)
 export const useGetLiveQueue = () => {
   return useQuery({
     queryKey: ['live-queue'],
     refetchInterval: 5000, // refresh setiap 5 detik
     queryFn: async () => {
-      const supabase = createClient();
-      const { data, error } = await supabase.rpc('get_live_queue');
-      if (error) throw error;
-      return data || [];
+      const res = await apiClient.get<TApiSuccessResponse<any[]>>('/queue/live');
+      return res.data.data || [];
     },
   });
 };
 
-// RPC get_appointment_stats — statistik laporan
+// GET /admin/dashboard/stats — statistik laporan grafik (Recharts)
 export const useGetAppointmentStats = (
   period: 'day' | 'month' | 'year' = 'month',
   from: string,
@@ -344,63 +276,32 @@ export const useGetAppointmentStats = (
   return useQuery({
     queryKey: ['appointment-stats', period, from, to, doctorId],
     queryFn: async () => {
-      const supabase = createClient();
-      const { data, error } = await supabase.rpc('get_appointment_stats', {
-        p_period: period,
-        p_from: from,
-        p_to: to,
-        p_doctor_id: doctorId || null,
-      });
+      const params: any = { period, from, to };
+      if (doctorId && doctorId !== 'all') params.doctor_id = doctorId;
 
-      if (error) throw error;
-      return data || [];
+      const res = await apiClient.get<TApiSuccessResponse<any[]>>('/admin/dashboard/stats', {
+        params,
+      });
+      return res.data.data || [];
     },
   });
 };
 
-// Metrik Dashboard Admin
+// GET /admin/dashboard/metrics — metrik ringkasan kartu operasional admin
 export const useGetAdminDashboardMetrics = () => {
   return useQuery({
     queryKey: ['admin-dashboard-stats'],
     refetchInterval: 15000,
     queryFn: async () => {
-      const supabase = createClient();
-      const todayStr = new Date().toISOString().split('T')[0];
-
-      // 1. Total janji hari ini
-      const { count: todayCount } = await supabase
-        .from('appointments')
-        .select('*', { count: 'exact', head: true })
-        .gte('created_at', `${todayStr}T00:00:00.000Z`);
-
-      // 2. Menunggu konfirmasi bukti bayar
-      const { count: pendingCount } = await supabase
-        .from('appointments')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'waiting_confirmation');
-
-      // 3. Janji selesai
-      const { count: doneCount } = await supabase
-        .from('appointments')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'done');
-
-      // 4. Total omzet (janji berstatus done)
-      const { data: revenueData } = await supabase
-        .from('appointments')
-        .select('consultation_fee')
-        .eq('status', 'done');
-
-      const totalRevenue = (revenueData || []).reduce(
-        (sum, item) => sum + (Number(item.consultation_fee) || 0),
-        0,
-      );
+      const res = await apiClient.get<TApiSuccessResponse<any>>('/admin/dashboard/metrics');
+      const raw = res.data.data || {};
 
       return {
-        todayCount: todayCount || 0,
-        pendingCount: pendingCount || 0,
-        doneCount: doneCount || 0,
-        totalRevenue,
+        todayCount: raw.today_appointments ?? raw.todayCount ?? 0,
+        pendingCount: raw.pending_verification ?? raw.pendingCount ?? 0,
+        doneCount: raw.today_appointments ?? raw.doneCount ?? 0,
+        totalRevenue: raw.today_revenue ?? raw.totalRevenue ?? 0,
+        waitingQueue: raw.waiting_queue ?? 0,
       };
     },
   });
@@ -415,7 +316,7 @@ export type TAdminAppointmentUpdatePayload = {
   notes?: string;
 };
 
-// PATCH /admin/appointments/:id — koreksi atau reschedule janji temu oleh admin
+// PATCH /admin/appointments/:id — reschedule / koreksi admin
 export const useAdminUpdateAppointment = ({
   onError,
   onSuccess,
@@ -424,79 +325,29 @@ export const useAdminUpdateAppointment = ({
   return useMutation({
     mutationKey: ['admin-update-appointment'],
     mutationFn: async (payload: TAdminAppointmentUpdatePayload) => {
-      const supabase = createClient();
-      const startTimeFormatted = payload.start_time
-        ? payload.start_time.length === 5
-          ? `${payload.start_time}:00`
-          : payload.start_time
-        : null;
-
-      const { error: rpcError } = await supabase.rpc('admin_update_appointment', {
-        p_appointment_id: payload.id,
-        p_doctor_id: payload.doctor_id || null,
-        p_session_date: payload.session_date || null,
-        p_start_time: startTimeFormatted,
-        p_status: payload.status || null,
-        p_notes: payload.notes || null,
-      });
-
-      if (rpcError && rpcError.message.includes('does not exist')) {
-        // Fallback langsung jika RPC belum dieksekusi di database
-        const updateObj: Record<string, any> = {
-          updated_at: new Date().toISOString(),
-        };
-        if (payload.status) {
-          updateObj.status = payload.status;
-          if (payload.status === 'done') {
-            updateObj.confirmed_at = new Date().toISOString();
-          }
-        }
-        if (payload.doctor_id) updateObj.doctor_id = payload.doctor_id;
-        if (payload.notes) updateObj.rejection_reason = payload.notes;
-
-        const { error: directError } = await supabase
-          .from('appointments')
-          .update(updateObj)
-          .eq('id', payload.id);
-
-        if (directError) {
-          throw new Error(directError.message);
-        }
-      } else if (rpcError) {
-        throw new Error(rpcError.message);
-      }
-
-      // Ambil appointment terupdate
-      const { data: row, error: fetchError } = await supabase
-        .from('appointments')
-        .select(`
-          *,
-          profiles:patient_id (id, full_name, phone_number),
-          doctors (id, full_name, photo_url),
-          practice_sessions (id, session_date, start_time, end_time),
-          ratings (*)
-        `)
-        .eq('id', payload.id)
-        .single();
-
-      if (fetchError || !row) {
-        throw new Error('Janji temu berhasil diubah, namun gagal memuat ulang data');
+      let res;
+      if (payload.status === 'done') {
+        res = await apiClient.patch(`/admin/appointments/${payload.id}/approve`);
+      } else if (payload.status === 'rejected') {
+        res = await apiClient.patch(`/admin/appointments/${payload.id}/reject`, {
+          reason: payload.notes || 'Ditolak oleh admin',
+        });
+      } else {
+        res = await apiClient.patch(`/admin/appointments/${payload.id}`, payload);
       }
 
       const publicUrlBase = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-      const mapped = mapToAdminAppointment(row, publicUrlBase);
-
       return {
         success: true as const,
         message: 'Janji temu berhasil diperbarui',
-        data: mapped,
+        data: normalizeAdminAppointment(res.data.data, publicUrlBase),
       };
     },
     onSuccess: (response) => {
       queryClient.invalidateQueries({ queryKey: ['get-admin-appointments'] });
       queryClient.invalidateQueries({ queryKey: ['get-appointment', response.data.id] });
-      queryClient.invalidateQueries({ queryKey: ['get-admin-dashboard-metrics'] });
-      queryClient.invalidateQueries({ queryKey: ['get-live-queue'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-dashboard-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['live-queue'] });
       onSuccess?.(response);
     },
     onError: (error) => onError?.(error as TApiError),
