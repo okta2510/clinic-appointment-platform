@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import Footer from "@/components/user/footer";
 import Navbar from "@/components/user/navbar";
+import AdminFloatingScanner from "@/components/admin/queue/admin-floating-scanner";
 
 export default function RootLayout({ children }: LayoutProps<'/'>) {
     return(
@@ -12,6 +13,9 @@ export default function RootLayout({ children }: LayoutProps<'/'>) {
         </Suspense>
         <div>{children}</div>
         <Footer />
+        <Suspense>
+            <AdminFloatingScanner />
+        </Suspense>
         </>
     )
 }
