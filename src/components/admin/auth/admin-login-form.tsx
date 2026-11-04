@@ -19,6 +19,7 @@ import {
 import { toFieldErrors } from '@/validations/shared/fields';
 
 const PANEL_ROLES: TRole[] = ['ADMIN', 'STAFF'];
+const STORAGE_KEY_ADMIN = 'arhe_saved_admin_email';
 
 // Form masuk panel admin; akun pasien yang mencoba masuk langsung di-logout lagi
 export default function AdminLoginForm() {
@@ -26,6 +27,7 @@ export default function AdminLoginForm() {
   const { data: me } = useMe();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
   const [errors, setErrors] = useState<FieldErrors<LoginValues>>({});
   const [serverError, setServerError] = useState('');
 
@@ -34,10 +36,34 @@ export default function AdminLoginForm() {
     if (me && PANEL_ROLES.includes(me.role)) router.replace('/admin/dashboard');
   }, [me, router]);
 
+  // Muat email admin tersimpan jika sebelumnya dicentang
+  useEffect(() => {
+    try {
+      const savedEmail = localStorage.getItem(STORAGE_KEY_ADMIN);
+      if (savedEmail) {
+        setEmail(savedEmail);
+        setRememberMe(true);
+      }
+    } catch {
+      // Abaikan jika localStorage dibatasi browser
+    }
+  }, []);
+
   const { mutate: logout } = useLogout();
 
   const { mutate: login, isPending: isSubmitting } = useLogin({
     onSuccess: ({ data }) => {
+      // Simpan atau bersihkan email sesuai status checklist
+      try {
+        if (rememberMe) {
+          localStorage.setItem(STORAGE_KEY_ADMIN, email.trim());
+        } else {
+          localStorage.removeItem(STORAGE_KEY_ADMIN);
+        }
+      } catch {
+        // Abaikan jika localStorage dibatasi browser
+      }
+
       if (PANEL_ROLES.includes(data.user.role)) {
         router.replace('/admin/dashboard');
         return;
@@ -122,6 +148,20 @@ export default function AdminLoginForm() {
             error={errors.password}
           />
         </Field>
+
+        {/* INPUT CHECKLIST: SIMPAN LOGIN ADMIN */}
+        <div className="flex items-center justify-between pt-1">
+          <label className="flex items-center gap-2.5 cursor-pointer text-sm font-medium text-neutral-700 select-none">
+            <input
+              type="checkbox"
+              id="admin-remember-me"
+              checked={rememberMe}
+              onChange={(e) => setRememberMe(e.target.checked)}
+              className="h-4 w-4 rounded border-neutral-300 text-[#1B1B7A] focus:ring-2 focus:ring-[#1B1B7A]/30 accent-[#1B1B7A]"
+            />
+            <span>Ingat saya (Simpan akun admin)</span>
+          </label>
+        </div>
       </div>
 
       <button type="submit" disabled={isSubmitting} className={`mt-7 w-full ${primaryBtn}`}>

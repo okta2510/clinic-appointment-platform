@@ -49,11 +49,12 @@ Seluruh skema tabel, fungsi transaksi (RPC), Row Level Security (RLS), dan Stora
 
 ### Opsi A: Lewat Supabase Dashboard (Paling Mudah)
 1. Buka menu **SQL Editor** di Dashboard Supabase.
-2. Klik **"New query"**.
-3. Buka file [supabase/migrations/20261103000000_init_schema.sql](./supabase/migrations/20261103000000_init_schema.sql), salin seluruh isinya, tempel ke SQL Editor, lalu klik tombol **"Run"**.
-   - Output sukses: Semua tabel, trigger, enum, RPC, dan RLS policies berhasil dibuat.
-4. Buka kembali **"New query"**, salin isi [supabase/seed.sql](./supabase/seed.sql), tempel dan klik **"Run"**.
-   - Output sukses: Data awal spesialisasi dokter dan jadwal praktik berhasil dimasukkan.
+2. Jalankan berkas SQL berikut secara berurutan:
+   - **Langkah 1**: [supabase/migrations/20261103000000_init_schema.sql](./supabase/migrations/20261103000000_init_schema.sql) (Tabel, Enum, Trigger, RLS, Storage, RPC transaksi awal).
+   - **Langkah 2**: [supabase/migrations/20261103000100_cron_jobs.sql](./supabase/migrations/20261103000100_cron_jobs.sql) (pg_cron pemulihan kuota & kedaluwarsa 30m).
+   - **Langkah 3**: [supabase/migrations/20261103000200_allow_ongoing_booking.sql](./supabase/migrations/20261103000200_allow_ongoing_booking.sql) (Peningkatan RPC booking jadwal hari ini, Base64 payment, & check-in fleksibel).
+   - **Langkah 4**: [supabase/wipe_and_seed_beauty_clinic.sql](./supabase/wipe_and_seed_beauty_clinic.sql) (Wipe & seed data klinik kecantikan, dokter estetika, jadwal hari ini, dan akun demo pengujian).
+   - Output sukses: Semua tabel, RPC transaksi, dokter kecantikan, dan akun demo siap digunakan.
 
 ### Opsi B: Lewat Supabase CLI (Opsional bagi yang memakai CLI)
 ```bash
@@ -379,12 +380,12 @@ Untuk memudahkan pengujian alur, tersedia 2 akun demo pengujian yang dicantumkan
    - Buat user 2: `pasien@klinik.test` (password: `Pasien123!`), centang **Auto Confirm User**.
 3. Buka **SQL Editor** dan jalankan perintah ini:
    ```sql
-   update public.profiles set role = 'admin', full_name = 'Admin Utama Klinik' where id = (select id from auth.users where email = 'admin@klinik.test');
+   update public.profiles set role = 'admin', full_name = 'Admin Utama Klinik Estetika' where id = (select id from auth.users where email = 'admin@klinik.test');
    update public.profiles set role = 'patient', full_name = 'Budi Pasien Demo', phone_number = '08123456789' where id = (select id from auth.users where email = 'pasien@klinik.test');
    ```
 
 ### Opsi B (Otomatis via SQL Script)
-Anda dapat menyalin script SQL dari file [`supabase/seed.sql`](./supabase/seed.sql) atau menjalankan blok kode berikut di SQL Editor:
+Anda dapat menyalin script SQL dari file [`supabase/wipe_and_seed_beauty_clinic.sql`](./supabase/wipe_and_seed_beauty_clinic.sql) atau menjalankan blok kode berikut di SQL Editor:
 
 ```sql
 create extension if not exists "pgcrypto";
@@ -405,7 +406,7 @@ begin
     '00000000-0000-0000-0000-000000000000', v_admin_id, 'authenticated', 'authenticated',
     'admin@klinik.test', crypt('Admin123!', gen_salt('bf')), now(),
     '{"provider":"email","providers":["email"]}'::jsonb,
-    '{"full_name":"Admin Utama Klinik"}'::jsonb, now(), now(),
+    '{"full_name":"Admin Utama Klinik Estetika"}'::jsonb, now(), now(),
     '', '', '', ''
   );
 
@@ -417,7 +418,7 @@ begin
     'email', now(), now(), now()
   );
 
-  update public.profiles set role = 'admin', full_name = 'Admin Utama Klinik' where id = v_admin_id;
+  update public.profiles set role = 'admin', full_name = 'Admin Utama Klinik Estetika' where id = v_admin_id;
 
   -- Buat User Pasien Demo
   insert into auth.users (

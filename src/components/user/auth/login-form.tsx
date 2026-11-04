@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useLogin } from '@/hooks/api/use-auth';
 import { getApiErrorMessage } from '@/lib/api-error';
 import { inputClass, linkClass } from '@/lib/styles';
@@ -20,6 +20,8 @@ import { PasswordInput } from '@/components/ui/password-input';
 const submitBtn =
   'mt-7 w-full rounded-2xl bg-[#1B1B7A] px-6 py-3.5 text-lg font-bold text-white transition-colors hover:bg-[#12125c] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#1B1B7A] disabled:cursor-not-allowed disabled:bg-neutral-300 disabled:text-neutral-500';
 
+const STORAGE_KEY_PATIENT = 'arhe_saved_patient_email';
+
 // Hanya path internal agar tidak bisa dipakai untuk open redirect
 function safeRedirect(path: string | null) {
   return path?.startsWith('/') && !path.startsWith('//') ? path : '/';
@@ -34,11 +36,36 @@ export function LoginForm() {
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
   const [errors, setErrors] = useState<FieldErrors<LoginValues>>({});
   const [serverError, setServerError] = useState('');
 
+  // Muat email tersimpan jika pengguna mengaktifkan Simpan Login sebelumnya
+  useEffect(() => {
+    try {
+      const savedEmail = localStorage.getItem(STORAGE_KEY_PATIENT);
+      if (savedEmail) {
+        setEmail(savedEmail);
+        setRememberMe(true);
+      }
+    } catch {
+      // Abaikan jika localStorage dibatasi browser
+    }
+  }, []);
+
   const { mutate: login, isPending: isSubmitting } = useLogin({
     onSuccess: ({ data }) => {
+      // Simpan atau bersihkan email sesuai status checklist
+      try {
+        if (rememberMe) {
+          localStorage.setItem(STORAGE_KEY_PATIENT, email.trim());
+        } else {
+          localStorage.removeItem(STORAGE_KEY_PATIENT);
+        }
+      } catch {
+        // Abaikan jika localStorage dibatasi browser
+      }
+
       const role = data.user.role;
       router.push(role === 'ADMIN' || role === 'STAFF' ? '/admin/dashboard' : redirectTo);
     },
@@ -138,6 +165,20 @@ export function LoginForm() {
               {errors.password}
             </p>
           )}
+        </div>
+
+        {/* INPUT CHECKLIST: SIMPAN LOGIN / REMEMBER ME */}
+        <div className="flex items-center justify-between pt-1">
+          <label className="flex items-center gap-2.5 cursor-pointer text-sm font-medium text-neutral-700 select-none">
+            <input
+              type="checkbox"
+              id="remember-me"
+              checked={rememberMe}
+              onChange={(e) => setRememberMe(e.target.checked)}
+              className="h-4 w-4 rounded border-neutral-300 text-[#1B1B7A] focus:ring-2 focus:ring-[#1B1B7A]/30 accent-[#1B1B7A]"
+            />
+            <span>Ingat saya (Simpan login)</span>
+          </label>
         </div>
       </div>
 

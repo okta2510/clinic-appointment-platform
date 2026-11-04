@@ -131,6 +131,12 @@ Sistem melayani dua peran utama: **Pasien (Patient)** dan **Admin/Staf Klinik (A
 6. **Dashboard & Statistik Klinik**:
    - Di `/admin/dashboard`: Menampilkan kartu metrik janji hari ini, antrean menunggu, verifikasi tertunda, dan estimasi omzet.
    - Di `/admin/statistic`: Grafik interaktif (menggunakan Recharts) yang dapat difilter per hari, per bulan, dan per tahun, serta perbandingan performa jumlah pasien dan total pendapatan antar dokter.
+7. **Floating Barcode Scanner di Halaman Publik**:
+   - Di seluruh halaman publik (`/`, `/doctor`, `/treatment`, `/queue`), staf/admin yang sedang login melihat Floating Action Button (FAB) di pojok kanan bawah (`fixed bottom-6 right-6 z-50`).
+   - Membuka modal pemindai kamera live (`window.BarcodeDetector`) dengan audio beep konfirmasi dan auto check-in seketika saat barcode terbaca, tanpa harus membuka panel admin.
+8. **Kompresi Bukti Bayar & Fitur Simpan Login (Remember Me)**:
+   - Bukti bayar otomatis dikompresi di sisi browser menjadi JPEG Base64 (~50–100 KB) untuk transmisi instan dan dapat ditinjau dalam modal ukuran penuh.
+   - Form masuk pasien dan admin dilengkapi input checklist "Ingat Saya" dengan persistensi email via localStorage terisolasi.
 
 ---
 
@@ -178,8 +184,8 @@ Seluruh skema database telah didefinisikan secara deklaratif di folder `supabase
 | Nama Tabel | Fungsi & Relasi | Hak Akses RLS |
 |---|---|---|
 | `public.profiles` | Menyimpan profil pengguna, sinkron 1:1 dengan `auth.users`. Kolom: `role` (`patient` / `admin`), `full_name`, `phone_number`, `avatar_url`. | Pasien baca/edit miliknya sendiri; Admin baca semua. Role dilindungi trigger database. |
-| `public.specialists` | Kategori spesialisasi dokter (Dokter Umum, Spesialis Anak, Gigi, dll). | Publik baca (`SELECT`); Admin kelola penuh. |
-| `public.doctors` | Data dokter: nama, tarif konsultasi (IDR), pengalaman kerja, bio, status aktif. | Publik baca (`SELECT`); Admin kelola penuh. |
+| `public.specialists` | Kategori spesialisasi dokter estetika (Dermatologi Sp.D.V.E, Estetika Medik AAAM, Bedah Plastik Sp.B.P.R.E, Laser & Kosmetik Kulit, Trikologi Rambut). | Publik baca (`SELECT`); Admin kelola penuh. |
+| `public.doctors` | Data dokter estetika: nama, tarif konsultasi (IDR), pengalaman kerja, bio, status aktif. | Publik baca (`SELECT`); Admin kelola penuh. |
 | `public.doctor_schedules` | Template jadwal mingguan dokter: hari (`day_of_week` 0–6), jam mulai/selesai, kuota pasien per sesi. | Publik baca (`SELECT`); Admin kelola penuh. |
 | `public.practice_sessions` | Sesi praktik konkret per tanggal kalender. Menyimpan `patient_quota` dan `current_queue_number`. | Publik baca (dibutuhkan untuk layar `/queue`); modifikasi hanya lewat RPC. |
 | `public.appointments` | Transaksi janji temu pasien. Menyimpan kode unik, `status`, `payment_deadline`, `booking_number`, `qr_token`, `checked_in_at`, dan `queue_number`. | Pasien baca miliknya; Admin baca semua. **Insert/Update via client dimatikan (hanya via RPC)**. |

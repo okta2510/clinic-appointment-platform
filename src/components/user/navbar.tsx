@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
+import { LayoutDashboard } from 'lucide-react';
 import { useLogout, useMe } from '@/hooks/api/use-auth';
 import { useEscapeKey } from '@/hooks/use-escape-key';
 import { useLockBodyScroll } from '@/hooks/use-lock-body-scroll';
@@ -16,7 +17,7 @@ const links = [
 ];
 
 // Belum login → tombol "Masuk" ke /login
-// Sudah login → foto profil dengan menu akun
+// Sudah login → foto profil dengan menu akun (+ pintasan dashboard jika admin)
 export default function Navbar() {
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
@@ -25,8 +26,15 @@ export default function Navbar() {
   const router = useRouter();
 
   const { data: me, isPending: isLoadingMe } = useMe();
+  const isAdmin = me?.role === 'ADMIN' || me?.role === 'STAFF';
   const user = me
-    ? { name: me.full_name, email: me.email, avatarUrl: me.profile_picture }
+    ? {
+        name: me.full_name,
+        email: me.email,
+        avatarUrl: me.profile_picture,
+        role: me.role,
+        isAdmin,
+      }
     : null;
 
   const { mutate: logout, isPending: isLoggingOut } = useLogout({
@@ -80,11 +88,25 @@ export default function Navbar() {
     );
   } else if (user) {
     accountContent = (
-      <AccountMenu
-        user={user}
-        onLogout={() => logout()}
-        isLoggingOut={isLoggingOut}
-      />
+      <div className="flex items-center gap-3 lg:order-last">
+        {/* TOMBOL PINTASAN DASHBOARD ADMIN DI DESKTOP */}
+        {isAdmin && (
+          <Link
+            href="/admin/dashboard"
+            className="hidden lg:inline-flex items-center gap-1.5 rounded-full bg-[#1B1B7A] px-3.5 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-[#12125c] active:scale-95"
+            title="Buka Dashboard Panel Admin"
+          >
+            <LayoutDashboard className="h-3.5 w-3.5 text-emerald-400" />
+            <span>Dashboard Admin</span>
+          </Link>
+        )}
+
+        <AccountMenu
+          user={user}
+          onLogout={() => logout()}
+          isLoggingOut={isLoggingOut}
+        />
+      </div>
     );
   } else {
     accountContent = (
@@ -122,7 +144,6 @@ export default function Navbar() {
             onClick={close}
             className="flex items-center gap-2.5 rounded-lg focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#1B1B7A]"
           >
-            {/* Monogram sementara. Ganti dengan <Image src="/logo.svg" .../> bila logo final sudah ada. */}
             <span
               aria-hidden="true"
               className="grid h-9 w-9 place-items-center rounded-full border-2 border-[#C5A46D] font-serif text-sm font-bold text-[#1B1B7A] outline-1 outline-offset-2 outline-[#C5A46D] lg:h-10 lg:w-10 lg:text-base"
@@ -187,11 +208,31 @@ export default function Navbar() {
           </div>
         </nav>
 
+        {/* DRAWER MENU MOBILE (< lg) */}
         <div
           id="mobile-menu"
           hidden={!open}
           className="max-h-[calc(100svh-4rem)] overflow-y-auto border-t border-neutral-200 bg-[#FAF8F3] lg:hidden"
         >
+          {/* BANNER MENU DASHBOARD ADMIN DI MOBILE */}
+          {user && isAdmin && (
+            <div className="mx-auto w-full max-w-6xl px-5 pt-4 md:px-8">
+              <Link
+                href="/admin/dashboard"
+                onClick={close}
+                className="flex items-center justify-between rounded-2xl bg-gradient-to-r from-[#1B1B7A] to-[#2E2E99] p-3.5 text-white shadow"
+              >
+                <span className="flex items-center gap-2.5 font-bold text-sm">
+                  <LayoutDashboard className="h-5 w-5 text-emerald-400" />
+                  <span>Dashboard Panel Admin</span>
+                </span>
+                <span className="rounded-lg bg-white/20 px-2 py-0.5 text-xs font-semibold">
+                  Masuk &rarr;
+                </span>
+              </Link>
+            </div>
+          )}
+
           {user && (
             <Link
               href="/profile"

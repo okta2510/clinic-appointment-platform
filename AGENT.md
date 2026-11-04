@@ -7,10 +7,10 @@ Ship working features over clever abstractions. If something feels over-engineer
 
 ## 1. Project Overview & Architecture
 
-A web platform for **one clinic with multiple doctors**.
+A web platform for **one Beauty & Aesthetic Clinic with multiple aesthetic and dermatology doctors**.
 
-- **Patients**: Browse doctors with debounced search & filters, select session, book appointment (with atomic quota lock), upload payment proof within 30 minutes, view appointment history & QR code, submit rating/review after consultation.
-- **Admin & Staff**: Manage doctors and practice schedules with quota limits, review and approve/reject payment proofs, scan QR codes on session date, manage live queue & call next patient, mark no-shows, monitor dashboard metrics and revenue statistics.
+- **Patients**: Browse aesthetic doctors with debounced search & filters (Dermatology Sp.D.V.E, Aesthetic Medicine Dipl. AAAM, Plastic Surgery Sp.B.P.R.E, Laser & Skincare Specialist, Trichology/Hair Care), select session, book appointment/treatment (with atomic quota lock), upload payment proof within 30 minutes, view appointment history & QR code, submit rating/review after consultation.
+- **Admin & Staff**: Manage doctors and practice schedules with quota limits, review and approve/reject payment proofs (with Base64 compression & full preview), scan QR codes on session date (both via queue panel and public floating scanner), manage live queue & call next patient, mark no-shows, monitor dashboard metrics and revenue statistics.
 - **In-App Documentation (`/docs`)**: A simple, dedicated tabbed documentation page explaining how the app works by role (Patient vs Admin) and feature lifecycle.
 - **Public TV Queue Display (`/queue`)**: Fullscreen live queue display for the clinic waiting room powered by Supabase Realtime.
 
