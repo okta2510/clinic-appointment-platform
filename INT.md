@@ -34,11 +34,16 @@ Dokumen ini ditulis secara praktis agar pengembang baru dapat melakukan setup pr
    ```bash
    cp example.env .env.local
    ```
-4. Isi konfigurasi dengan nilai yang telah Anda salin:
+4. Isi konfigurasi dengan nilai yang telah Anda salin serta URL gateway backend Express:
    ```env
    # .env.local
+   # 1. Kredensial Supabase Project
    NEXT_PUBLIC_SUPABASE_URL=https://xyzcompany.supabase.co
    NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
+
+   # 2. Backend REST API Gateway (Express.js service pada port 8000)
+   NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
    ```
 
 ---
@@ -466,4 +471,33 @@ alter publication supabase_realtime add table public.practice_sessions;
 ```sql
 select * from cron.job_run_details order by start_time desc limit 5;
 ```
+
+---
+
+## 11. Koordinasi Multi-Service (Backend Port 8000 & Frontend Port 3000)
+
+Ekosistem aplikasi ini terdiri atas dua service lokal yang berbagi satu database Supabase yang sama:
+
+| Service | Direktori | Port Lokal | Peran Utama |
+|---|---|---|---|
+| **Backend REST API** | `../api-clinic-appointment` | `http://localhost:8000` | Gateway endpoint `/api/v1/*`, otentikasi JWT, validasi bisnis, query database via Prisma ORM 7. |
+| **Frontend Web App** | `./clinic-appointment-platform` | `http://localhost:3000` | UI Next.js 16, client-side caching (TanStack Query), komunikasi via `apiClient`, tampilan display antrean TV. |
+| **Shared Database** | Supabase Cloud | Port 5432 / Pooler 6543 | PostgreSQL tunggal tempat tabel, trigger, dan RPC transaksi berada. |
+
+### Urutan Menjalankan Multi-Service Secara Bersamaan:
+1. **Jalankan Backend Terlebih Dahulu**:
+   ```bash
+   cd ../api-clinic-appointment
+   npm run dev
+   ```
+   Pastikan backend siap melayani request di `http://localhost:8000/api/v1`.
+2. **Jalankan Frontend di Terminal Berbeda**:
+   ```bash
+   cd clinic-appointment-platform
+   npm run dev
+   ```
+   Frontend akan otomatis meneruskan panggilan data ke backend melalui `src/lib/api-client.ts`.
+3. **Database Sinkron Otomatis**:
+   Karena kedua service mengarah ke instance Supabase yang sama, perubahan data yang dibuat dari frontend (misalnya membuat janji baru atau menyetujui pembayaran) akan langsung tersimpan di PostgreSQL Supabase dan terbaca oleh kedua service tanpa replikasi manual.
+
 

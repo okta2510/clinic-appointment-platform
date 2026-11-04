@@ -17,9 +17,11 @@ A web platform for **one Beauty & Aesthetic Clinic with multiple aesthetic and d
 ### Technology Stack
 - **Framework**: Next.js 16 (App Router, React 19, TypeScript strict mode)
 - **Styling**: Tailwind CSS v4 + daisyUI 5 (mobile-first, design tokens in `src/lib/styles.ts`)
-- **Backend-as-a-Service**: **Supabase**
+- **Backend Application Server**: Express.js REST API (`api-clinic-appointment` running at `http://localhost:8000/api/v1` with Prisma ORM 7)
+- **API Client Layer**: Axios client singleton (`src/lib/api-client.ts`) with automatic Bearer token injection, envelope unwrapping, and centralized error handling
+- **Database-as-a-Service**: **PostgreSQL Supabase Cloud**
   - **Database**: PostgreSQL with Row Level Security (RLS) and atomic Stored Procedures (RPC).
-  - **Auth**: Supabase Auth via `@supabase/ssr` (HTTP-only secure session cookies).
+  - **Auth**: Supabase Auth via `@supabase/ssr` & JWT Bearer token authentication.
   - **Storage**: Buckets `avatars` (public), `doctor-photos` (public), `payment-proofs` (private).
   - **Realtime**: PostgreSQL CDC publication for live queue display.
   - **Automation**: `pg_cron` for 30-minute auto-expiry and quota release.
@@ -38,24 +40,25 @@ A web platform for **one Beauty & Aesthetic Clinic with multiple aesthetic and d
 | [BRIEF.md](./BRIEF.md) | Original MVP assignment and score weight breakdown | All |
 | [PRD.md](./PRD.md) | Product Requirements Document (Goals, Personas, Functional & Non-Functional Specs) | All |
 | [PLAN.md](./PLAN.md) | Step-by-step phased execution roadmap from Phase 0 to Phase 9 | Developers / Agents |
-| [TECH.md](./TECH.md) | Deep technical architecture, end-to-end user journeys, database schemas, RPC functions, state machine | Developers / Architects |
-| [INT.md](./INT.md) | Step-by-step Supabase integration guide (Setup, Migrations, Seed, Next.js 16 clients, Storage) | Developers / DevOps |
-| [agent.md](./agent.md) | Coding rules, atomic design, responsive rules, restrictions, and conventions | AI Agents & Contributors |
-| [README.md](./README.md) | Repository onboarding, project setup, and quickstart commands | New Programmers |
+| [TECH.md](./TECH.md) | Deep technical architecture, 3-tier structure, API client layer, database schemas, RPC functions, state machine | Developers / Architects |
+| [INT.md](./INT.md) | Step-by-step Supabase integration & multi-service setup guide (Frontend port 3000 & Backend port 8000) | Developers / DevOps |
+| [AGENT.md](./AGENT.md) | Coding rules, atomic design, responsive rules, restrictions, and conventions | AI Agents & Contributors |
+| [README.md](./README.md) | Repository onboarding, initial run guide ("Zero to Running"), and quickstart commands | New Programmers |
 
 ---
 
 ## 3. Basic Restrictions & Guardrails (MUST FOLLOW)
 
-### Scope
+### Scope & Architectural Boundaries
 - **Follow BRIEF.md & PLAN.md strictly**: Only build features described in the roadmap.
-- **Do not bypass PostgreSQL RPCs**: All appointment mutations (booking, payment proof submission, approval, rejection, check-in, call next, no-show) must go through the dedicated Stored Procedures in `supabase/migrations/20261103000000_init_schema.sql`. Do not write raw `INSERT`/`UPDATE` to `appointments` directly from client.
-- **Do not invent arbitrary backend endpoints**: All data logic is powered by Supabase.
+- **External Backend Read-Only Rule**: Direktori backend `/Users/oktaviardi/Okta/api-clinic-appointment` adalah **STRICTLY READ-ONLY**. AI Agent dilarang keras mengubah, menambah, atau menghapus file apa pun di direktori backend tersebut saat bekerja di repo frontend ini.
+- **Strictly No Auto-Commit Rule**: Dilarang keras menjalankan perintah `git commit` tanpa konfirmasi dan persetujuan eksplisit dari pengguna. Seluruh perubahan wajib disimpan di working tree.
+- **Data Layer Standard**: Seluruh query dan mutasi data frontend wajib menggunakan custom hooks di `src/hooks/api/*` yang memanggil `apiClient` (`src/lib/api-client.ts`). Jangan melakukan fetch HTTP mentah di dalam komponen UI.
 
 ### Security
-- **No secrets in client code**: Only `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` are allowed in `.env.local`. Never commit `.env` or service role keys.
-- **Cookies**: Use `@supabase/ssr` with secure HTTP-only cookies managed via `src/proxy.ts`. Never store JWTs in `localStorage`.
-- **Private Files**: Payment proofs must remain in the private bucket `payment-proofs` under `<user_id>/...` path.
+- **No secrets in client code**: Hanya variabel lingkungan `NEXT_PUBLIC_*` (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `NEXT_PUBLIC_API_URL`) yang diizinkan di `.env.local`. Jangan pernah menyertakan service-role key di sisi client.
+- **Token & Cookies**: Gunakan token JWT yang tersimpan di localStorage/cookie secara aman yang otomatis diinjeksikan oleh `apiClient`.
+- **Private Files**: Bukti pembayaran wajib tetap tersimpan di bucket privat Supabase `payment-proofs` dengan isolasi path `<user_id>/...`.
 
 ### Code Quality & Simplicity
 - **No `any`**: Strictly type all queries and RPC payloads in `src/types/`.
@@ -140,7 +143,7 @@ To keep evaluator and new user onboarding seamless:
 - **PLAN.md**: Step-by-step phased execution roadmap from Phase 0 to Phase 9.
 - **TECH.md**: Deep technical architecture, end-to-end user journeys, database schemas, RPC functions, state machine.
 - **INT.md**: Step-by-step Supabase integration guide (Setup, Migrations, Seed, Next.js 16 clients, Storage).
-- **agent.md**: Coding rules, atomic design, responsive rules, restrictions, and conventions.
+- **AGENT.md**: Coding rules, atomic design, responsive rules, restrictions, and conventions.
 - **README.md**: Repository onboarding, project setup, and quickstart commands.
 - dont put technical complexity in the README.md, keep it simple and concise for new developers.
 - technical complexity should be in TECH.md and INT.md, not README.md.

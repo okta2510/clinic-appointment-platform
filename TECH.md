@@ -6,40 +6,59 @@ Dokumen ini menjelaskan secara menyeluruh cara kerja teknis dari **Clinic Appoin
 
 ## 1. Arsitektur Tingkat Tinggi (High-Level Architecture)
 
-Aplikasi ini menggunakan pola arsitektur **Direct Backend-as-a-Service (BaaS)** berbasis **Next.js 16** dan **Supabase**:
+Aplikasi ini menggunakan pola arsitektur **3-Tier Modern** yang memadukan keandalan Frontend React modern, kontrol logika bisnis di Application Server, dan integritas transaksi database PostgreSQL:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                      Next.js 16 (React 19 + TypeScript)                 │
+│              TIER 1: FRONTEND NEXT.JS 16 (Port 3000)                    │
 │                                                                         │
-│   Client Components                 Server Components / Proxy           │
-│   (TanStack Query v5)               (@supabase/ssr + proxy.ts)          │
-│          │                                      │                       │
-│          ▼                                      ▼                       │
-│    createBrowserClient                   createServerClient             │
-└──────────┬──────────────────────────────────────┬───────────────────────┘
-           │                                      │
-           │ HTTPS / WebSocket (Cookie HTTP-Only) │
-           ▼                                      ▼
+│   Client Pages & Organisms           Custom API Hooks                   │
+│   (Atomic Design Components)   ───▶  (TanStack Query v5)                │
+│                                              │                          │
+│                                              ▼                          │
+│                                      Axios Client Singleton             │
+│                                      (src/lib/api-client.ts)            │
+│                                       - Bearer Token Injection          │
+│                                       - Auto Unwrap {success, data}     │
+│                                       - Centralized Error Interceptor   │
+└───────────────────────────────┬──────────────────┬──────────────────────┘
+                                │                  │
+              REST API (JSON)   │                  │ Supabase Realtime (WS)
+      HTTP http://localhost:8000/api/v1           │ & Storage Direct
+                                ▼                  │
+┌──────────────────────────────────────────────────┴──────────────────────┐
+│              TIER 2: BACKEND APPLICATION SERVER (Port 8000)             │
+│                                                                         │
+│   Express.js REST API Gateway (api-clinic-appointment)                  │
+│   ├── Authentication Middleware (JWT Bearer Token Validation)           │
+│   ├── Business Domain Controllers & Routes (/auth, /doctors, etc)       │
+│   └── Database Access Layer (Prisma ORM 7)                              │
+└───────────────────────────────┬─────────────────────────────────────────┘
+                                │
+                                │ Database Connection Pool (PostgreSQL 15+)
+                                ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                           SUPABASE CLOUD                                │
+│              TIER 3: SHARED DATABASE & SERVICES (Supabase Cloud)        │
 │                                                                         │
 │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────────────┐  │
-│  │  Supabase Auth  │  │ Supabase Storage│  │   PostgreSQL Database   │  │
-│  │ (Session/Cookie)│  │ (Avatars/Proofs)│  │  - Row Level Security   │  │
+│  │ Supabase Storage│  │  Supabase Auth  │  │   PostgreSQL Database   │  │
+│  │ (Avatars/Proofs)│  │ (Auth Engine)   │  │  - Row Level Security   │  │
 │  └─────────────────┘  └─────────────────┘  │  - Stored Procedures/RPC│  │
-│                                            │  - pg_cron (Tiap Menit) │  │
-│  ┌──────────────────────────────────────┐  │  - Realtime Engine      │  │
-│  │   Realtime Channel (Live Queue TV)   │  └─────────────────────────┘  │
+│                                            │  - pg_cron (Auto Expire)│  │
+│  ┌──────────────────────────────────────┐  │  - Realtime CDC Engine  │  │
+│  │  Realtime Publication (Live Queue)   │  └─────────────────────────┘  │
 │  └──────────────────────────────────────┘                               │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Keunggulan Arsitektur Ini untuk MVP:
-1. **Tanpa Server Express Terpisah**: Mengurangi kompleksitas deploy, biaya server, dan *maintenance* ganda.
-2. **Keamanan di Level Database (RLS)**: Hak akses data dikunci di tingkat tabel Postgres. Sekalipun API dipanggil dari browser, data pasien lain tidak dapat diintip.
-3. **Integritas Data Transaksional (ACID)**: Aturan ketat seperti kuota janji temu dan nomor antrean dikunci di database PostgreSQL lewat Stored Procedures (RPC).
-4. **Realtime Bawaan**: Layar antrean TV dapat langsung mendengarkan perubahan data secara otomatis tanpa setup server WebSocket manual.
+### Keunggulan Arsitektur 3-Tier Ini:
+1. **Pemisahan Perhatian (Separation of Concerns)**: Frontend murni berfokus pada pengalaman pengguna yang responsif, validasi antarmuka, dan visualisasi data. Logika otorisasi, relasi database, dan kalkulasi analitik ditangani oleh backend Express.js.
+2. **Database Bersama (Shared Single Source of Truth)**: Baik Express backend maupun Next.js frontend terhubung ke basis data PostgreSQL Supabase yang sama, menjamin seluruh transaksi, kuota, dan status sinkron secara instan.
+3. **Komunikasi REST Terstandar (`src/lib/api-client.ts`)**:
+   - Seluruh request secara otomatis menyertakan `Authorization: Bearer <token>` dari penyimpanan lokal/cookie.
+   - Respons server dengan envelope standar `{ success: true, message, data, meta }` diproses secara seragam.
+   - Interceptor menangani error status HTTP (`401 Unauthorized` redirect/logout, `403 Forbidden`, `404 Not Found`, `422/400 Validation`) dengan pesan yang ramah pengguna.
+4. **Realtime Display & Storage**: Layar monitor TV antrean (`/queue`) tetap memanfaatkan keunggulan Supabase Realtime CDC (`postgres_changes`) untuk pembaruan nomor antrean seketika tanpa jeda polling.
 
 ---
 
@@ -120,11 +139,13 @@ Sistem melayani dua peran utama: **Pasien (Patient)** dan **Admin/Staf Klinik (A
    - Admin membuka modal peninjau bukti transfer:
      - **Terima (Approve)**: Panggil RPC `approve_appointment` -> Status menjadi `done`, QR token terbit, pasien menerima notifikasi/tiket.
      - **Tolak (Reject)**: Admin mengisi alasan penolakan -> Panggil RPC `reject_appointment` -> Status menjadi `rejected`, kuota langsung dikembalikan ke sesi dokter.
-4. **Operasional Check-In di Hari H**:
-   - Di `/admin/queueManagement`, staf membuka scanner kamera.
-   - Pasien menyodorkan QR code -> staf memindai QR tersebut.
-   - Sistem memvalidasi bahwa sesi praktik adalah **hari ini**. Jika valid, panggil RPC `check_in(qr_token)`.
-   - Sistem secara otomatis menetapkan nomor antrean fisik (`queue_number = nomor terakhir + 1`).
+4. **Operasional Check-In di Hari H & Proteksi Anti-Duplikasi**:
+   - Di `/admin/queueManagement` atau floating scanner kamera publik, staf memindai QR code tiket pasien.
+   - Endpoint backend `/api/v1/admin/queue/check-in` mengeksekusi tiga lapis validasi keamanan:
+     a. **Validasi Status**: Janji temu wajib berstatus `done` (sudah diverifikasi pembayarannya).
+     b. **Validasi Hari H**: Tanggal sesi praktik harus merupakan hari ini (`session_date = today`). Pasien yang datang sebelum/sesudah tanggal reservasi akan ditolak dengan pesan yang jelas.
+     c. **Proteksi Anti-Duplikasi Check-in**: Jika QR code yang sama discan berulang kali, sistem mendeteksi `checked_in_at` atau `queue_number` yang telah terdaftar, mencegah penerbitan nomor antrean ganda dan mengembalikan informasi nomor antrean yang sudah dipegang pasien.
+   - Jika valid, sistem secara otomatis menetapkan nomor antrean fisik kedatangan (`queue_number = nomor terakhir + 1`) dan memperbarui status antrean secara atomik.
 5. **Manajemen Antrean Langsung (Live Queue Management)**:
    - Staf menekan tombol **"Panggil Berikutnya" (Call Next)**: Sistem memanggil RPC `call_next(session_id)` yang memajukan `current_queue_number` ke nomor antrean pasien check-in berikutnya.
    - **Tandai Tidak Hadir (No-Show)**: Jika pasien sudah memiliki janji `done` tetapi tidak kunjung check-in hingga sesi selesai/terlewat, admin menekan tombol "No-Show" via RPC `mark_no_show`.
