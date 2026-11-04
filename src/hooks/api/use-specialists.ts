@@ -60,6 +60,18 @@ export const useGetSpecialists = (
   });
 };
 
+// GET /specialists/:id
+export const useGetDetailSpecialist = (id?: string) => {
+  return useQuery<TApiSuccessResponse<TSpecialist>>({
+    enabled: Boolean(id),
+    queryKey: ['get-specialist-detail', id],
+    queryFn: async () => {
+      const res = await apiClient.get<TApiSuccessResponse<any>>(`/specialists/${id}`);
+      return res.data;
+    },
+  });
+};
+
 // POST /specialists
 export const useCreateSpecialist = ({
   onError,

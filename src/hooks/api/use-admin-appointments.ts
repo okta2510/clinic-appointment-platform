@@ -134,6 +134,24 @@ export const useGetAdminAppointments = ({
   });
 };
 
+// GET /admin/appointments/:id — detail janji temu pasien (ADMIN)
+export const useGetAdminAppointmentById = (id?: string) => {
+  return useQuery<TApiSuccessResponse<TAdminAppointment>>({
+    enabled: Boolean(id),
+    queryKey: ['get-admin-appointment-detail', id],
+    staleTime: 5000,
+    queryFn: async () => {
+      const res = await apiClient.get<TApiSuccessResponse<any>>(`/admin/appointments/${id}`);
+      const publicUrlBase = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+      return {
+        success: true,
+        message: res.data.message || 'Detail janji temu berhasil dimuat',
+        data: normalizeAdminAppointment(res.data.data, publicUrlBase),
+      };
+    },
+  });
+};
+
 // PATCH /admin/appointments/:id/approve — setujui pembayaran pasien
 export const useApproveAppointment = ({
   onError,
@@ -341,10 +359,11 @@ export const useGetAdminDashboardMetrics = () => {
 
       return {
         todayCount: raw.today_appointments ?? raw.todayCount ?? 0,
+        waitingQueue: raw.waiting_queue ?? raw.waitingQueue ?? 0,
         pendingCount: raw.pending_verification ?? raw.pendingCount ?? 0,
-        doneCount: raw.today_appointments ?? raw.doneCount ?? 0,
-        totalRevenue: raw.today_revenue ?? raw.totalRevenue ?? 0,
-        waitingQueue: raw.waiting_queue ?? 0,
+        todayRevenue: raw.today_revenue ?? raw.todayRevenue ?? 0,
+        doneCount: raw.done_count ?? raw.doneCount ?? 0,
+        totalRevenue: raw.total_revenue ?? raw.totalRevenue ?? raw.today_revenue ?? 0,
       };
     },
   });

@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import {
   CalendarCheck,
   CheckCircle2,
@@ -21,12 +22,23 @@ import { formatRupiah } from '@/lib/format';
 import { STATUS_META } from '@/constants/transaction-status';
 
 export default function AdminDashboard() {
-  const { data: metrics, isLoading: metricsLoading } = useGetAdminDashboardMetrics();
-  const { data: liveQueue, isLoading: queueLoading } = useGetLiveQueue();
-  const { data: pendingPayments } = useGetAdminAppointments({
+  const { data: metrics, isLoading: metricsLoading, refetch: refetchMetrics } = useGetAdminDashboardMetrics();
+  const { data: liveQueue, isLoading: queueLoading, refetch: refetchQueue } = useGetLiveQueue();
+  const { data: pendingPayments, refetch: refetchPayments } = useGetAdminAppointments({
     status: 'waiting_confirmation',
     limit: 5,
   });
+
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleReload = async () => {
+    setIsRefreshing(true);
+    try {
+      await Promise.all([refetchMetrics(), refetchQueue(), refetchPayments()]);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   return (
     <div className="space-y-8">
@@ -44,12 +56,13 @@ export default function AdminDashboard() {
         <div className="flex flex-wrap items-center gap-3">
           <button
             type="button"
-            onClick={() => window.location.reload()}
-            title="Muat ulang halaman dashboard"
-            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-neutral-300 bg-white px-4 py-2.5 font-semibold text-neutral-700 shadow-xs transition hover:bg-neutral-50 active:scale-95"
+            onClick={handleReload}
+            disabled={isRefreshing}
+            title="Segarkan data dashboard"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-neutral-300 bg-white px-4 py-2.5 font-semibold text-neutral-700 shadow-xs transition hover:bg-neutral-50 active:scale-95 disabled:opacity-60"
           >
-            <RotateCw className="h-4 w-4 text-[#1B1B7A]" />
-            Reload Page
+            <RotateCw className={`h-4 w-4 text-[#1B1B7A] ${isRefreshing ? 'animate-spin' : ''}`} />
+            {isRefreshing ? 'Menyinkronkan...' : 'Segarkan Data'}
           </button>
 
           <Link
@@ -63,9 +76,9 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* 4 Kartu Metrik KPI */}
+      {/* 4 Kartu Metrik KPI (Sesuai API.md Bagian 8.1: /admin/dashboard/metrics) */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {/* Metrik 1: Janji Hari Ini */}
+        {/* Metrik 1: Janji Hari Ini (today_appointments) */}
         <div className="rounded-3xl border border-neutral-200 bg-white p-6 shadow-xs">
           <div className="flex items-center justify-between">
             <span className="text-sm font-semibold text-neutral-500">Janji Hari Ini</span>
@@ -79,7 +92,26 @@ export default function AdminDashboard() {
           <p className="mt-1 text-xs text-neutral-500">Reservasi terdaftar</p>
         </div>
 
-        {/* Metrik 2: Menunggu Konfirmasi */}
+        {/* Metrik 2: Menunggu Antrean (waiting_queue) */}
+        <div className="rounded-3xl border border-neutral-200 bg-white p-6 shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-semibold text-neutral-500">Menunggu Antrean</span>
+            <div className="rounded-2xl bg-indigo-50 p-3 text-[#1B1B7A]">
+              <Users className="h-6 w-6" />
+            </div>
+          </div>
+          <p className="mt-4 text-3xl font-extrabold text-[#1B1B7A]">
+            {metricsLoading ? '...' : metrics?.waitingQueue || 0}
+          </p>
+          <Link
+            href="/admin/queueManagement"
+            className="mt-1 inline-block text-xs font-semibold text-[#1B1B7A] underline decoration-[#F29A9A]"
+          >
+            Lihat ruang tunggu &rarr;
+          </Link>
+        </div>
+
+        {/* Metrik 3: Verifikasi Pembayaran (pending_verification) */}
         <div className="rounded-3xl border border-neutral-200 bg-white p-6 shadow-xs">
           <div className="flex items-center justify-between">
             <span className="text-sm font-semibold text-neutral-500">Verifikasi Pembayaran</span>
@@ -98,30 +130,16 @@ export default function AdminDashboard() {
           </Link>
         </div>
 
-        {/* Metrik 3: Selesai Dilayani */}
+        {/* Metrik 4: Pendapatan Hari Ini (today_revenue) */}
         <div className="rounded-3xl border border-neutral-200 bg-white p-6 shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-semibold text-neutral-500">Terkonfirmasi</span>
+            <span className="text-sm font-semibold text-neutral-500">Pendapatan Hari Ini</span>
             <div className="rounded-2xl bg-green-50 p-3 text-green-800">
-              <CheckCircle2 className="h-6 w-6" />
-            </div>
-          </div>
-          <p className="mt-4 text-3xl font-extrabold text-green-900">
-            {metricsLoading ? '...' : metrics?.doneCount || 0}
-          </p>
-          <p className="mt-1 text-xs text-neutral-500">Status done / terbit QR</p>
-        </div>
-
-        {/* Metrik 4: Estimasi Omzet */}
-        <div className="rounded-3xl border border-neutral-200 bg-white p-6 shadow-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-semibold text-neutral-500">Total Pendapatan</span>
-            <div className="rounded-2xl bg-indigo-50 p-3 text-[#1B1B7A]">
               <Wallet className="h-6 w-6" />
             </div>
           </div>
-          <p className="mt-4 text-2xl font-extrabold text-[#1B1B7A]">
-            {metricsLoading ? '...' : formatRupiah(metrics?.totalRevenue || 0)}
+          <p className="mt-4 text-2xl font-extrabold text-green-900">
+            {metricsLoading ? '...' : formatRupiah(metrics?.todayRevenue || 0)}
           </p>
           <Link
             href="/admin/statistic"
@@ -134,7 +152,7 @@ export default function AdminDashboard() {
 
       {/* Grid: Antrean Live Hari Ini & Verifikasi Pembayaran Terbaru */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {/* Antrean Sesi Hari Ini */}
+        {/* Antrean Sesi Hari Ini (Sesuai API.md Bagian 7.1: /queue/live) */}
         <div className="rounded-3xl border border-neutral-200 bg-white p-6 shadow-xs">
           <div className="flex items-center justify-between border-b border-neutral-100 pb-4">
             <div className="flex items-center gap-2">
@@ -160,7 +178,7 @@ export default function AdminDashboard() {
               liveQueue.map((item: any) => (
                 <div
                   key={item.session_id}
-                  className="flex items-center justify-between rounded-2xl border border-neutral-100 bg-neutral-50 p-4"
+                  className="flex flex-col gap-3 rounded-2xl border border-neutral-100 bg-neutral-50 p-4 sm:flex-row sm:items-center sm:justify-between"
                 >
                   <div>
                     <p className="font-bold text-neutral-900">{item.doctor_name}</p>
@@ -168,8 +186,27 @@ export default function AdminDashboard() {
                       {item.specialist_name} &bull; {item.start_time?.slice(0, 5)} -{' '}
                       {item.end_time?.slice(0, 5)} WIB
                     </p>
+                    {item.next_numbers && item.next_numbers.length > 0 ? (
+                      <div className="mt-2 flex items-center gap-1.5 flex-wrap">
+                        <span className="text-[11px] font-semibold text-neutral-500">
+                          Berikutnya:
+                        </span>
+                        {item.next_numbers.map((num: number) => (
+                          <span
+                            key={num}
+                            className="inline-flex items-center rounded-lg bg-blue-100 px-2 py-0.5 text-xs font-bold text-blue-800"
+                          >
+                            #{num}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="mt-1 text-[11px] text-neutral-400">
+                        Belum ada antrean berikutnya
+                      </p>
+                    )}
                   </div>
-                  <div className="text-right">
+                  <div className="text-left sm:text-right">
                     <span className="text-xs font-medium text-neutral-500">Sedang Melayani:</span>
                     <p className="text-2xl font-black text-[#1B1B7A]">
                       #{item.current_queue_number || '-'}
