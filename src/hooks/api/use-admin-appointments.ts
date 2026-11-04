@@ -195,6 +195,7 @@ export const useCheckIn = ({
       }
 
       const res = await apiClient.post<TApiSuccessResponse<any>>('/admin/queue/check-in', {
+        qr_token: clean,
         token: clean,
       });
 

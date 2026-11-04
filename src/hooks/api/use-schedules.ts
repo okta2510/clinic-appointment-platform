@@ -67,10 +67,9 @@ export const useCreateSchedule = ({
   return useMutation({
     mutationKey: ['create-schedule'],
     mutationFn: async (body: TScheduleCreate) => {
-      const startTimeFormatted =
-        body.start_time.length === 5 ? `${body.start_time}:00` : body.start_time;
-      const endTimeFormatted =
-        body.end_time.length === 5 ? `${body.end_time}:00` : body.end_time;
+      // Backend Zod regex: /^([01]\d|2[0-3]):[0-5]\d$/ (HH:mm)
+      const startTimeFormatted = (body.start_time || '').slice(0, 5);
+      const endTimeFormatted = (body.end_time || '').slice(0, 5);
 
       const res = await apiClient.post<TApiSuccessResponse<any>>('/schedules', {
         doctor_id: body.doctor_id,
@@ -107,12 +106,10 @@ export const useUpdateSchedule = ({
       const payload: any = {};
       if (body.day_of_week !== undefined) payload.day_of_week = Number(body.day_of_week);
       if (body.start_time !== undefined) {
-        payload.start_time =
-          body.start_time.length === 5 ? `${body.start_time}:00` : body.start_time;
+        payload.start_time = (body.start_time || '').slice(0, 5);
       }
       if (body.end_time !== undefined) {
-        payload.end_time =
-          body.end_time.length === 5 ? `${body.end_time}:00` : body.end_time;
+        payload.end_time = (body.end_time || '').slice(0, 5);
       }
       if (body.patient_quota !== undefined) payload.patient_quota = Number(body.patient_quota);
       if (body.is_active !== undefined) payload.is_active = body.is_active;

@@ -170,10 +170,14 @@ export const useCreateDoctor = ({
     mutationKey: ['create-doctor'],
     mutationFn: async (body: TDoctorCreate) => {
       const res = await apiClient.post<TApiSuccessResponse<any>>('/doctors', {
+        email: body.email,
+        phone_number: body.phone_number,
+        password: body.password,
         full_name: body.full_name,
         bio: body.bio || undefined,
         experience_years: Number(body.experience_years) || 0,
         consultation_fee: Number(body.consultation_fee) || 0,
+        photo: body.photo || (body as any).photo_url || undefined,
         photo_url: body.photo || (body as any).photo_url || undefined,
         specialist_id: body.specialist_id || undefined,
         is_active: body.is_active ?? true,
