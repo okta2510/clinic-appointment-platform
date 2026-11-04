@@ -279,10 +279,52 @@ export const useGetAppointmentStats = (
       const params: any = { period, from, to };
       if (doctorId && doctorId !== 'all') params.doctor_id = doctorId;
 
-      const res = await apiClient.get<TApiSuccessResponse<any[]>>('/admin/dashboard/stats', {
+      const res = await apiClient.get<TApiSuccessResponse<any>>('/admin/dashboard/stats', {
         params,
       });
-      return res.data.data || [];
+
+      const raw = res.data.data;
+      if (Array.isArray(raw)) return raw;
+
+      if (raw && typeof raw === 'object') {
+        const timeline = Array.isArray(raw.timeline) ? raw.timeline : [];
+        const doctorPerf = Array.isArray(raw.doctor_performance) ? raw.doctor_performance : [];
+
+        if (timeline.length > 0) {
+          // Petakan data timeline backend ke bentuk array statistik yang kompatibel dengan UI
+          return timeline.map((item: any) => ({
+            period_start: item.label,
+            label: item.label,
+            doctor_name: doctorPerf[0]?.full_name || 'Semua Dokter',
+            total:
+              (item.done || 0) +
+              (item.rejected || 0) +
+              (item.canceled || 0) +
+              (item.expired || 0),
+            done: item.done || 0,
+            rejected: item.rejected || 0,
+            canceled: item.canceled || 0,
+            expired: item.expired || 0,
+            revenue: item.revenue || 0,
+          }));
+        }
+
+        if (doctorPerf.length > 0) {
+          return doctorPerf.map((d: any) => ({
+            period_start: from,
+            label: from,
+            doctor_name: d.full_name,
+            total: d.total_patients || 0,
+            done: d.total_patients || 0,
+            rejected: 0,
+            canceled: 0,
+            expired: 0,
+            revenue: d.total_revenue || 0,
+          }));
+        }
+      }
+
+      return [];
     },
   });
 };

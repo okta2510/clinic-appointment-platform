@@ -50,7 +50,7 @@ export default function AdminStatistic() {
   const { data: doctorsData } = useGetDoctors();
   const doctorsList: TDoctor[] = doctorsData?.data ?? [];
 
-  // Fetch stats from RPC
+  // Fetch stats from API / RPC
   const {
     data: rawStats = [],
     isLoading,
@@ -63,8 +63,63 @@ export default function AdminStatistic() {
     selectedDoctorId === 'all' ? undefined : selectedDoctorId,
   );
 
+  // Pastikan statsList selalu berupa Array yang aman untuk di-iterasi
+  const statsList = useMemo(() => {
+    if (Array.isArray(rawStats)) return rawStats;
+    if (rawStats && typeof rawStats === 'object') {
+      const obj = rawStats as any;
+      if (Array.isArray(obj.timeline)) {
+        return obj.timeline.map((t: any) => ({
+          period_start: t.label,
+          label: t.label,
+          doctor_name: selectedDoctorId && selectedDoctorId !== 'all' ? 'Dokter Terpilih' : 'Semua Dokter',
+          total: (t.done || 0) + (t.rejected || 0) + (t.canceled || 0) + (t.expired || 0),
+          done: t.done || 0,
+          rejected: t.rejected || 0,
+          canceled: t.canceled || 0,
+          expired: t.expired || 0,
+          revenue: t.revenue || 0,
+        }));
+      }
+      if (Array.isArray(obj.doctor_performance)) {
+        return obj.doctor_performance.map((d: any) => ({
+          period_start: fromDate,
+          label: fromDate,
+          doctor_name: d.full_name || 'Dokter',
+          total: d.total_patients || 0,
+          done: d.total_patients || 0,
+          rejected: 0,
+          canceled: 0,
+          expired: 0,
+          revenue: d.total_revenue || 0,
+        }));
+      }
+    }
+    return [];
+  }, [rawStats, fromDate, selectedDoctorId]);
+
   // Aggregate metrics
   const totals = useMemo(() => {
+    // Jika backend sudah memberikan total_summary secara langsung
+    if (rawStats && typeof rawStats === 'object' && !Array.isArray(rawStats) && (rawStats as any).total_summary) {
+      const summary = (rawStats as any).total_summary;
+      const totalAppointments = Number(summary.total_appointments) || 0;
+      const done = Number(summary.total_done) || 0;
+      const revenue = Number(summary.total_revenue) || 0;
+      const completionRate =
+        totalAppointments > 0 ? Math.round((done / totalAppointments) * 100) : 0;
+
+      return {
+        totalAppointments,
+        done,
+        rejected: 0,
+        canceled: 0,
+        expired: 0,
+        revenue,
+        completionRate,
+      };
+    }
+
     let totalAppointments = 0;
     let done = 0;
     let rejected = 0;
@@ -72,7 +127,7 @@ export default function AdminStatistic() {
     let expired = 0;
     let revenue = 0;
 
-    for (const item of rawStats) {
+    for (const item of statsList) {
       totalAppointments += Number(item.total) || 0;
       done += Number(item.done) || 0;
       rejected += Number(item.rejected) || 0;
@@ -93,12 +148,40 @@ export default function AdminStatistic() {
       revenue,
       completionRate,
     };
-  }, [rawStats]);
+  }, [rawStats, statsList]);
 
   // Group by doctor for doctor performance table
-  const doctorStats = useMemo(() => {
+  const doctorStats = useMemo<
+    Array<{
+      doctor_name: string;
+      total: number;
+      done: number;
+      rejected: number;
+      canceled: number;
+      expired: number;
+      revenue: number;
+    }>
+  >(() => {
+    // Jika backend menyediakan doctor_performance langsung
+    if (
+      rawStats &&
+      typeof rawStats === 'object' &&
+      !Array.isArray(rawStats) &&
+      Array.isArray((rawStats as any).doctor_performance)
+    ) {
+      return (rawStats as any).doctor_performance.map((d: any) => ({
+        doctor_name: d.full_name || 'Dokter',
+        total: Number(d.total_patients) || 0,
+        done: Number(d.total_patients) || 0,
+        rejected: 0,
+        canceled: 0,
+        expired: 0,
+        revenue: Number(d.total_revenue) || 0,
+      }));
+    }
+
     const map = new Map<string, any>();
-    for (const item of rawStats) {
+    for (const item of statsList) {
       const docName = item.doctor_name || 'Dokter';
       const existing = map.get(docName) || {
         doctor_name: docName,
@@ -118,13 +201,13 @@ export default function AdminStatistic() {
       map.set(docName, existing);
     }
     return Array.from(map.values());
-  }, [rawStats]);
+  }, [rawStats, statsList]);
 
   // Group by period for chart
   const chartData = useMemo(() => {
     const map = new Map<string, any>();
-    for (const item of rawStats) {
-      const key = item.period_start || 'N/A';
+    for (const item of statsList) {
+      const key = item.period_start || item.label || 'N/A';
       const existing = map.get(key) || {
         label: key,
         total: 0,
@@ -137,7 +220,7 @@ export default function AdminStatistic() {
       map.set(key, existing);
     }
     return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label));
-  }, [rawStats]);
+  }, [statsList]);
 
   const maxTotalInChart = useMemo(() => {
     const max = Math.max(...chartData.map((d) => d.total), 1);
