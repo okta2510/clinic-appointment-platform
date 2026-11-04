@@ -229,8 +229,13 @@ export const useCheckIn = ({
     mutationKey: ['check-in'],
     mutationFn: async (qrToken: string) => {
       const supabase = createClient();
+      let clean = qrToken.trim();
+      if (clean.includes(':')) {
+        const parts = clean.split(':');
+        clean = (parts[1] || parts[0]).trim();
+      }
       const { data, error } = await supabase.rpc('check_in', {
-        p_qr_token: qrToken.trim(),
+        p_qr_token: clean,
       });
 
       if (error) throw error;

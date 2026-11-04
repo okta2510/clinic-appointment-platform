@@ -52,11 +52,12 @@ function mapToPatientAppointment(row: any, publicUrlBase: string): TAppointment 
     total_amount: String(fee),
     status: row.status as TTransactionStatus,
     payment_deadline: row.payment_deadline,
+    checked_in_at: row.checked_in_at || null,
     queue_number: row.queue_number ?? null,
     qr_token: row.status === 'done' ? row.qr_token || null : null,
     remaining_seconds: remainingSeconds,
     can_cancel: ['waiting_payment', 'waiting_confirmation'].includes(row.status),
-    can_rate: row.status === 'done' && !rating,
+    can_rate: row.status === 'done' && Boolean(row.checked_in_at) && !rating,
     ratings: rating
       ? {
           id: rating.id || row.id,

@@ -1,12 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   AlertCircle,
   Bell,
+  Camera,
   CheckCircle2,
   Clock,
   QrCode,
+  RefreshCw,
   Search,
   Stethoscope,
   UserCheck,
@@ -34,6 +36,17 @@ export default function QueueManagement() {
   const [callNextModalOpen, setCallNextModalOpen] = useState(false);
   const [noShowTarget, setNoShowTarget] = useState<any | null>(null);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
+
+  // Live Camera Scanner states
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [isCameraStarting, setIsCameraStarting] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
+  const [supportsBarcodeDetector, setSupportsBarcodeDetector] = useState(true);
+
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const scanIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Live queues query
   const { data: liveSessions = [], isLoading: isSessionsLoading, refetch: refetchQueue } =
@@ -91,13 +104,157 @@ export default function QueueManagement() {
     },
   });
 
+  // Periksa dukungan BarcodeDetector pada browser
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const hasBD = typeof (window as any).BarcodeDetector !== 'undefined';
+      setSupportsBarcodeDetector(hasBD);
+    }
+  }, []);
+
+  // Cleanup camera stream saat unmount
+  useEffect(() => {
+    return () => {
+      stopCamera();
+    };
+  }, []);
+
+  const playScanBeep = () => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(880, ctx.currentTime);
+      gain.gain.setValueAtTime(0.15, ctx.currentTime);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.12);
+    } catch {}
+  };
+
+  const stopCamera = () => {
+    if (scanIntervalRef.current) {
+      clearInterval(scanIntervalRef.current);
+      scanIntervalRef.current = null;
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    setIsCameraOpen(false);
+    setIsCameraStarting(false);
+  };
+
+  const startCamera = async (mode: 'environment' | 'user' = 'environment') => {
+    setCameraError(null);
+    setIsCameraStarting(true);
+    setIsCameraOpen(true);
+
+    try {
+      // Hentikan stream terdahulu jika sedang berganti kamera
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((t) => t.stop());
+      }
+
+      if (!navigator?.mediaDevices?.getUserMedia) {
+        throw new Error('Browser ini tidak mendukung akses kamera langsung (getUserMedia).');
+      }
+
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: mode,
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
+        audio: false,
+      });
+
+      streamRef.current = stream;
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+      }
+
+      setIsCameraStarting(false);
+      startDetectionLoop();
+    } catch (err: any) {
+      setIsCameraStarting(false);
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        setCameraError('Izin akses kamera tidak diberikan. Harap izinkan kamera di setelan browser Anda.');
+      } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+        setCameraError('Kamera tidak ditemukan pada perangkat ini.');
+      } else {
+        setCameraError(err.message || 'Gagal menyalakan kamera.');
+      }
+    }
+  };
+
+  const startDetectionLoop = () => {
+    if (typeof window === 'undefined') return;
+    const BarcodeDetectorClass = (window as any).BarcodeDetector;
+
+    if (!BarcodeDetectorClass) {
+      // BarcodeDetector belum didukung secara native
+      return;
+    }
+
+    let detector: any;
+    try {
+      detector = new BarcodeDetectorClass({
+        formats: ['qr_code', 'code_128', 'code_39', 'ean_13', 'upc_a'],
+      });
+    } catch {
+      detector = new BarcodeDetectorClass();
+    }
+
+    if (scanIntervalRef.current) clearInterval(scanIntervalRef.current);
+
+    scanIntervalRef.current = setInterval(async () => {
+      if (!videoRef.current || videoRef.current.readyState < 2) return;
+      try {
+        const barcodes = await detector.detect(videoRef.current);
+        if (barcodes && barcodes.length > 0) {
+          const raw = barcodes[0].rawValue;
+          if (raw && raw.trim().length > 0) {
+            playScanBeep();
+            stopCamera();
+
+            let cleanToken = raw.trim();
+            if (cleanToken.includes(':')) {
+              const parts = cleanToken.split(':');
+              cleanToken = (parts[1] || parts[0]).trim();
+            }
+
+            setQrInput(cleanToken);
+            setCheckInError(null);
+            setCheckInResult(null);
+
+            await doCheckIn(cleanToken);
+          }
+        }
+      } catch {
+        // Frame processing drop, lanjutkan ke frame berikutnya
+      }
+    }, 300);
+  };
+
   const handleScanSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!qrInput.trim()) return;
     setCheckInError(null);
     setCheckInResult(null);
     try {
-      await doCheckIn(qrInput.trim());
+      let clean = qrInput.trim();
+      if (clean.includes(':')) {
+        const parts = clean.split(':');
+        clean = (parts[1] || parts[0]).trim();
+      }
+      await doCheckIn(clean);
     } catch {
       // handled in onError
     }
@@ -116,7 +273,7 @@ export default function QueueManagement() {
             Manajemen Antrean & QR Check-In
           </h1>
           <p className="mt-1 text-sm text-neutral-600">
-            Pindai QR code pasien saat tiba di klinik, kelola antrean langsung, dan panggil pasien.
+            Pindai QR code atau barcode tiket pasien saat tiba di klinik, kelola antrean langsung, dan panggil pasien.
           </p>
         </div>
       </div>
@@ -145,14 +302,14 @@ export default function QueueManagement() {
               <h2 id="scanner-heading" className="text-base font-bold text-[#1B1B7A]">
                 Check-In Pasien di Tempat
               </h2>
-              <p className="text-xs text-neutral-500">Scan QR atau masukkan token reservasi</p>
+              <p className="text-xs text-neutral-500">Scan dengan kamera atau masukkan kode reservasi</p>
             </div>
           </div>
 
           <form onSubmit={handleScanSubmit} className="mt-5 space-y-3">
             <div>
               <label htmlFor="qrInput" className="block text-xs font-semibold uppercase text-neutral-500 mb-1">
-                Token QR Code / UUID
+                Token QR Code / UUID / Kode Janji
               </label>
               <input
                 id="qrInput"
@@ -165,21 +322,31 @@ export default function QueueManagement() {
               />
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <button
+                type="button"
+                onClick={() => startCamera(facingMode)}
+                className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-700 px-4 py-2.5 text-xs font-bold text-white shadow transition hover:from-emerald-700 hover:to-teal-800 active:scale-95"
+              >
+                <Camera className="h-4 w-4" />
+                <span>Pindai Kamera Langsung</span>
+              </button>
+
               <button
                 type="submit"
                 disabled={isCheckingIn || !qrInput.trim()}
                 className={`flex-1 ${primaryBtn}`}
               >
-                {isCheckingIn ? 'Memproses...' : 'Check-In Sekarang'}
+                {isCheckingIn ? 'Memproses...' : 'Check-In'}
               </button>
+
               <button
                 type="button"
                 onClick={fillSampleToken}
                 className="rounded-xl border border-neutral-300 bg-neutral-100 px-3 py-2 text-xs font-medium text-neutral-700 hover:bg-neutral-200"
                 title="Gunakan token QR sample demo untuk menguji"
               >
-                Demo Token
+                Demo
               </button>
             </div>
           </form>
@@ -260,93 +427,102 @@ export default function QueueManagement() {
                   <p className="text-xs uppercase tracking-wider text-white/80 font-semibold">
                     Sedang Dilayani
                   </p>
-                  <div className="mt-2 text-6xl font-black tracking-tight text-white">
-                    {currentSession.current_queue_number > 0
-                      ? `#${currentSession.current_queue_number}`
-                      : '-'}
+                  <p className="mt-2 text-6xl font-black tracking-tight">
+                    {currentSession.current_queue_number ? (
+                      `#${currentSession.current_queue_number}`
+                    ) : (
+                      <span className="text-3xl font-bold opacity-60">Belum Ada</span>
+                    )}
+                  </p>
+                  <div className="mt-4 flex items-center justify-center gap-1.5 text-xs text-white/80">
+                    <Clock className="h-3.5 w-3.5" />
+                    <span>
+                      Sesi: {formatTime(currentSession.start_time)}–{formatTime(currentSession.end_time)} WIB
+                    </span>
                   </div>
-                  <p className="mt-2 text-xs text-white/80">
-                    {currentSession.doctor_name}
-                  </p>
-                  <p className="text-[11px] text-[#F29A9A]">
-                    {currentSession.specialist_name}
-                  </p>
                 </div>
 
-                {/* NEXT PATIENTS & CALL BUTTON */}
-                <div className="flex flex-col justify-between rounded-2xl bg-neutral-50 border border-neutral-200 p-5">
+                {/* DOCTOR & STATS */}
+                <div className="flex flex-col justify-between rounded-2xl border border-neutral-200 bg-neutral-50 p-4">
                   <div>
-                    <p className="text-xs font-semibold text-neutral-500 uppercase">
-                      Nomor Berikutnya
+                    <div className="flex items-center gap-2 text-xs font-bold text-[#1B1B7A]">
+                      <Stethoscope className="h-4 w-4" />
+                      <span>{currentSession.doctor_name}</span>
+                    </div>
+                    <p className="mt-1 text-xs text-neutral-500">
+                      Spesialisasi Kulit & Estetika
                     </p>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {currentSession.next_numbers && currentSession.next_numbers.length > 0 ? (
-                        currentSession.next_numbers.map((num: number) => (
-                          <span
-                            key={num}
-                            className="inline-flex items-center justify-center rounded-xl bg-white border border-neutral-300 px-3 py-1.5 text-sm font-bold text-neutral-800 shadow-sm"
-                          >
-                            #{num}
-                          </span>
-                        ))
-                      ) : (
-                        <p className="text-xs text-neutral-400 italic">
-                          Tidak ada antrean berikutnya yang sudah check-in.
+
+                    <div className="mt-4 grid grid-cols-3 gap-2 border-t border-neutral-200 pt-3 text-center">
+                      <div>
+                        <p className="text-[10px] uppercase text-neutral-500 font-semibold">Total Sesi</p>
+                        <p className="text-sm font-bold text-neutral-800">{currentSession.total_booked || 0}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] uppercase text-neutral-500 font-semibold">Check-In</p>
+                        <p className="text-sm font-bold text-green-700">{currentSession.total_checked_in || 0}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] uppercase text-neutral-500 font-semibold">Sisa</p>
+                        <p className="text-sm font-bold text-neutral-600">
+                          {Math.max(0, (currentSession.total_checked_in || 0) - (currentSession.current_queue_number || 0))}
                         </p>
-                      )}
+                      </div>
                     </div>
                   </div>
 
-                  <div className="mt-4">
-                    <button
-                      type="button"
-                      onClick={() => setCallNextModalOpen(true)}
-                      className={`w-full ${primaryBtn} flex items-center justify-center gap-2`}
-                    >
-                      <Bell className="h-4 w-4" />
-                      Panggil Pasien Selanjutnya
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setCallNextModalOpen(true)}
+                    disabled={isCallingNext}
+                    className="mt-4 w-full rounded-xl bg-gradient-to-r from-[#1B1B7A] to-[#2E2E99] py-3 text-xs font-bold text-white shadow transition hover:opacity-95 disabled:opacity-50"
+                  >
+                    {isCallingNext ? 'Memanggil...' : 'Panggil Antrean Berikutnya'}
+                  </button>
                 </div>
               </div>
             ) : (
-              <div className="mt-8 text-center text-neutral-500">
-                <Clock className="mx-auto h-10 w-10 text-neutral-300" />
-                <p className="mt-2 text-sm">Tidak ada sesi praktik yang sedang berlangsung hari ini.</p>
+              <div className="mt-8 rounded-2xl border border-dashed border-neutral-300 p-8 text-center">
+                <Users className="mx-auto h-8 w-8 text-neutral-400" />
+                <p className="mt-2 text-sm font-semibold text-neutral-700">Tidak ada sesi praktik aktif saat ini</p>
+                <p className="text-xs text-neutral-500">
+                  Jadwal dokter hari ini belum dimulai atau belum ada janji temu yang terdaftar.
+                </p>
               </div>
             )}
           </div>
         </section>
       </div>
 
-      {/* APPOINTMENTS FOR CURRENT SESSION TABLE */}
+      {/* SESSION APPOINTMENTS LIST */}
       <section
-        aria-labelledby="session-list-heading"
-        className="rounded-2xl border border-neutral-200 bg-white shadow-sm overflow-hidden"
+        aria-labelledby="appointments-list-heading"
+        className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm"
       >
-        <div className="border-b border-neutral-200 px-5 py-4 flex items-center justify-between">
-          <div>
-            <h2 id="session-list-heading" className="text-base font-bold text-[#1B1B7A]">
-              Daftar Pasien Sesi Ini
-            </h2>
-            <p className="text-xs text-neutral-500">
-              Pantau status check-in dan kelola kehadiran pasien di sesi dokter yang aktif.
-            </p>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#1B1B7A]/10 text-[#1B1B7A]">
+              <Users className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 id="appointments-list-heading" className="text-base font-bold text-[#1B1B7A]">
+                Daftar Pasien Sesi Ini
+              </h2>
+              <p className="text-xs text-neutral-500">
+                Status check-in, nomor antrean, dan kehadiran pasien
+              </p>
+            </div>
           </div>
-          <span className="rounded-full bg-neutral-100 px-3 py-1 text-xs font-medium text-neutral-700">
-            Total {sessionAppointments.length} Pasien Terdaftar
-          </span>
         </div>
 
         {sessionAppointments.length === 0 ? (
-          <div className="p-10 text-center text-neutral-500">
-            <Users className="mx-auto h-10 w-10 text-neutral-300" />
-            <p className="mt-2 text-sm">Belum ada pasien terdaftar untuk sesi ini.</p>
+          <div className="mt-6 rounded-xl border border-dashed border-neutral-200 p-8 text-center text-sm text-neutral-500">
+            Belum ada data reservasi pada sesi ini.
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="mt-4 overflow-x-auto">
             <table className="w-full text-left text-sm text-neutral-700">
-              <thead className="bg-neutral-50 text-xs font-semibold uppercase text-neutral-600 border-b border-neutral-200">
+              <thead className="border-b border-neutral-200 bg-neutral-50 text-xs font-bold uppercase text-neutral-600">
                 <tr>
                   <th scope="col" className="px-5 py-3">No. Booking</th>
                   <th scope="col" className="px-5 py-3">Nama Pasien</th>
@@ -420,11 +596,95 @@ export default function QueueManagement() {
         )}
       </section>
 
+      {/* CAMERA SCANNER MODAL */}
+      {isCameraOpen && (
+        <Modal
+          onClose={stopCamera}
+          title="Pemindai Kamera Barcode & QR Pasien"
+          titleId="camera-scanner-modal"
+        >
+          <div className="space-y-4">
+            <div className="relative aspect-video w-full overflow-hidden rounded-2xl bg-neutral-900 flex items-center justify-center">
+              {/* Live Video Element */}
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                className="h-full w-full object-cover"
+              />
+
+              {/* Viewfinder Target Reticle */}
+              <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                <div className="relative h-44 w-44 rounded-2xl border-2 border-emerald-400/90 shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]">
+                  {/* Pojok-pojok bingkai */}
+                  <div className="absolute -top-1 -left-1 h-5 w-5 border-t-4 border-l-4 border-emerald-400 rounded-tl" />
+                  <div className="absolute -top-1 -right-1 h-5 w-5 border-t-4 border-r-4 border-emerald-400 rounded-tr" />
+                  <div className="absolute -bottom-1 -left-1 h-5 w-5 border-b-4 border-l-4 border-emerald-400 rounded-bl" />
+                  <div className="absolute -bottom-1 -right-1 h-5 w-5 border-b-4 border-r-4 border-emerald-400 rounded-br" />
+
+                  {/* Garis laser animasi pemindai */}
+                  <div className="absolute left-0 right-0 top-1/2 h-0.5 -translate-y-1/2 bg-emerald-300 shadow-[0_0_12px_#34d399] animate-pulse" />
+                </div>
+              </div>
+
+              {isCameraStarting && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 text-white gap-2">
+                  <RefreshCw className="h-6 w-6 animate-spin text-emerald-400" />
+                  <span className="text-xs font-semibold">Menghubungkan ke kamera...</span>
+                </div>
+              )}
+            </div>
+
+            {cameraError && (
+              <div className="rounded-xl border border-red-300 bg-red-50 p-3 text-xs text-red-900">
+                <p className="font-semibold">Kendala Akses Kamera:</p>
+                <p className="mt-1">{cameraError}</p>
+              </div>
+            )}
+
+            {!supportsBarcodeDetector && (
+              <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
+                Browser ini belum mengaktifkan BarcodeDetector otomatis. Anda dapat memasukkan kode janji atau token QR langsung pada formulir.
+              </div>
+            )}
+
+            <p className="text-center text-xs text-neutral-500">
+              Arahkan kamera ke QR code pada layar smartphone pasien atau barcode tiket janji temu. Pemindai akan berbunyi dan memproses check-in seketika saat terdeteksi.
+            </p>
+
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const nextMode = facingMode === 'environment' ? 'user' : 'environment';
+                  setFacingMode(nextMode);
+                  startCamera(nextMode);
+                }}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-neutral-300 bg-white px-3 py-2 text-xs font-semibold text-neutral-700 hover:bg-neutral-50"
+              >
+                <RefreshCw className="h-3.5 w-3.5" />
+                <span>Ganti Kamera ({facingMode === 'environment' ? 'Kamera Belakang' : 'Kamera Depan'})</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={stopCamera}
+                className={secondaryBtn}
+              >
+                Tutup Pemindai
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
       {/* CALL NEXT CONFIRMATION MODAL */}
       {callNextModalOpen && currentSession && (
         <Modal
           onClose={() => setCallNextModalOpen(false)}
           title="Panggil Pasien Selanjutnya"
+          titleId="call-next-modal"
         >
           <div className="space-y-4">
             <p className="text-sm text-neutral-600">
@@ -462,6 +722,7 @@ export default function QueueManagement() {
         <Modal
           onClose={() => setNoShowTarget(null)}
           title="Tandai Pasien Tidak Hadir (No-Show)"
+          titleId="no-show-modal"
         >
           <div className="space-y-4">
             <p className="text-sm text-neutral-600">

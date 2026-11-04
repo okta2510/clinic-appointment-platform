@@ -41,6 +41,8 @@ export type TAppointment = {
   total_amount: string;
   status: TTransactionStatus;
   payment_deadline: string | null;
+  /** Terisi saat pasien tiba & check-in di klinik */
+  checked_in_at?: string | null;
   /** Terisi setelah admin approve; bisa maju bila pasien lain membatalkan */
   queue_number: number | null;
   /** Isi QR, hanya ada untuk status done */
