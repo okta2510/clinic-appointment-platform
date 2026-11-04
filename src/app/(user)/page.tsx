@@ -11,11 +11,15 @@ export default function LandingPage() {
     <>
       <Hero />
       <ResultsCarousel />
-      <TreatmentTabs />
+      <div className="bg-white">
+        <TreatmentTabs />
+      </div>
       <ClinicBanner />
       <Advantages />
       <Stats />
-      <DoctorsSection />
+      <div className="bg-white">
+        <DoctorsSection />
+      </div>
     </>
   );
 }

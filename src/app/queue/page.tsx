@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import {
   Clock,
+  Home,
   Maximize2,
   Minimize2,
   RefreshCw,
@@ -89,18 +90,26 @@ export default function PublicLiveQueuePage() {
                 type="button"
                 onClick={() => refetch()}
                 title="Muat ulang antrean"
-                className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white"
+                className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white transition"
               >
                 <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
               </button>
               <button
                 type="button"
                 onClick={toggleFullscreen}
-                title="Layar Penuh (TV Monitor)"
-                className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white"
+                title={isFullscreen ? 'Keluar dari Layar Penuh (Minimize)' : 'Layar Penuh (TV Monitor)'}
+                className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white transition"
               >
                 {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
               </button>
+              <Link
+                href="/"
+                title="Kembali ke Beranda (Back to Home)"
+                className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#1B1B7A] px-3.5 text-xs font-bold text-white shadow transition hover:bg-[#2A2A9A] active:scale-95 border border-indigo-500/30"
+              >
+                <Home className="h-4 w-4 text-[#C5A46D]" />
+                <span className="hidden sm:inline">Beranda</span>
+              </Link>
             </div>
           </div>
         </div>
