@@ -17,10 +17,18 @@ export default function Footer() {
         <section aria-label="Tentang klinik">
           <Link
             href="/"
-            aria-label="Ke beranda"
-            className="inline-block rounded-md bg-white px-3 py-1.5 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#F29A9A]"
+            aria-label="Ke beranda IH Beauty Clinic"
+            className="inline-flex items-center gap-2.5 rounded-lg focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#C5A46D]"
           >
-            <img src="/logo-klinik.png" alt="Logo klinik" className="h-9 w-auto" />
+            <span
+              aria-hidden="true"
+              className="grid h-9 w-9 place-items-center rounded-full border-2 border-[#C5A46D] bg-[#FAF8F3] font-serif text-sm font-bold text-[#1B1B7A] outline-1 outline-offset-2 outline-[#C5A46D] lg:h-10 lg:w-10 lg:text-base"
+            >
+              IH
+            </span>
+            <span className="font-serif text-lg font-semibold text-white lg:text-xl">
+              IH Beauty Clinic
+            </span>
           </Link>
           <p className="mt-5 max-w-xs leading-relaxed text-white/80">
             Klinik kecantikan dengan dokter berpengalaman dan perawatan yang

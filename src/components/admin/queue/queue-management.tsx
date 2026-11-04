@@ -5,8 +5,10 @@ import {
   AlertCircle,
   Bell,
   Camera,
+  CheckCheck,
   CheckCircle2,
   Clock,
+  Info,
   QrCode,
   RefreshCw,
   Search,
@@ -353,19 +355,60 @@ export default function QueueManagement() {
 
           {/* CHECK-IN RESULT OR ERROR */}
           {checkInResult && (
-            <div className="mt-4 rounded-xl border border-green-300 bg-green-50 p-4 text-green-900">
+            <div
+              className={`mt-4 rounded-xl border p-4 shadow-sm ${
+                checkInResult.data?.is_completed || checkInResult.is_completed
+                  ? 'border-purple-300 bg-purple-50 text-purple-950'
+                  : checkInResult.data?.already_checked_in || checkInResult.already_checked_in
+                  ? 'border-amber-300 bg-amber-50 text-amber-950'
+                  : 'border-green-300 bg-green-50 text-green-900'
+              }`}
+            >
               <div className="flex items-start gap-2.5">
-                <CheckCircle2 className="mt-0.5 h-5 w-5 text-green-600 shrink-0" />
-                <div>
-                  <h3 className="font-bold text-sm">Check-In Berhasil!</h3>
+                {checkInResult.data?.is_completed || checkInResult.is_completed ? (
+                  <CheckCheck className="mt-0.5 h-5 w-5 text-purple-700 shrink-0" />
+                ) : checkInResult.data?.already_checked_in || checkInResult.already_checked_in ? (
+                  <Info className="mt-0.5 h-5 w-5 text-amber-700 shrink-0" />
+                ) : (
+                  <CheckCircle2 className="mt-0.5 h-5 w-5 text-green-600 shrink-0" />
+                )}
+                <div className="flex-1">
+                  <h3 className="font-bold text-sm">
+                    {checkInResult.data?.is_completed || checkInResult.is_completed
+                      ? 'Pemeriksaan Pasien Sudah Selesai'
+                      : checkInResult.data?.already_checked_in || checkInResult.already_checked_in
+                      ? 'Pasien Sudah Terdaftar Check-In Sebelumnya'
+                      : 'Check-In Berhasil! Nomor Antrean Diterbitkan'}
+                  </h3>
                   <p className="mt-1 text-xs">
-                    Pasien telah terverifikasi hadir di klinik untuk sesi hari ini.
+                    {checkInResult.data?.message ||
+                      checkInResult.message ||
+                      'Pasien telah terverifikasi hadir di klinik untuk sesi hari ini.'}
                   </p>
+                  {(checkInResult.data?.patient_name || checkInResult.patient_name) && (
+                    <p className="mt-1 text-xs font-semibold">
+                      Pasien: {checkInResult.data?.patient_name || checkInResult.patient_name} (
+                      {checkInResult.data?.appointment_code || checkInResult.appointment_code})
+                    </p>
+                  )}
                   <div className="mt-3 flex items-center gap-3">
-                    <span className="text-xs text-green-800">Nomor Antrean Diterbitkan:</span>
-                    <span className="rounded-lg bg-green-700 px-3 py-1 text-lg font-extrabold text-white">
-                      #{checkInResult.queue_number}
+                    <span className="text-xs font-medium">Nomor Antrean:</span>
+                    <span
+                      className={`rounded-lg px-3 py-1 text-lg font-extrabold text-white shadow ${
+                        checkInResult.data?.is_completed || checkInResult.is_completed
+                          ? 'bg-purple-800'
+                          : checkInResult.data?.already_checked_in || checkInResult.already_checked_in
+                          ? 'bg-amber-700'
+                          : 'bg-green-700'
+                      }`}
+                    >
+                      #{checkInResult.data?.queue_number || checkInResult.queue_number}
                     </span>
+                    {(checkInResult.data?.already_checked_in || checkInResult.already_checked_in) && (
+                      <span className="rounded-md bg-amber-200/80 px-2 py-0.5 text-[10px] font-bold text-amber-900">
+                        Tidak Diduplikasi
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>

@@ -6,7 +6,9 @@ import {
   AlertCircle,
   Camera,
   CheckCircle2,
+  CheckCheck,
   ExternalLink,
+  Info,
   QrCode,
   RefreshCw,
   X,
@@ -342,25 +344,62 @@ export default function AdminFloatingScanner() {
               </div>
             )}
 
-            {/* HASIL CHECK-IN BERHASIL */}
+            {/* HASIL CHECK-IN BERHASIL / MULTI-STATUS */}
             {checkInResult && (
-              <div className="rounded-2xl border border-green-300 bg-green-50 p-4 text-green-900 shadow-sm">
+              <div
+                className={`rounded-2xl border p-4 shadow-sm ${
+                  checkInResult.data?.is_completed || checkInResult.is_completed
+                    ? 'border-purple-300 bg-purple-50 text-purple-950'
+                    : checkInResult.data?.already_checked_in || checkInResult.already_checked_in
+                    ? 'border-amber-300 bg-amber-50 text-amber-950'
+                    : 'border-green-300 bg-green-50 text-green-900'
+                }`}
+              >
                 <div className="flex items-start gap-3">
-                  <CheckCircle2 className="mt-0.5 h-6 w-6 text-green-600 shrink-0" />
+                  {checkInResult.data?.is_completed || checkInResult.is_completed ? (
+                    <CheckCheck className="mt-0.5 h-6 w-6 text-purple-700 shrink-0" />
+                  ) : checkInResult.data?.already_checked_in || checkInResult.already_checked_in ? (
+                    <Info className="mt-0.5 h-6 w-6 text-amber-700 shrink-0" />
+                  ) : (
+                    <CheckCircle2 className="mt-0.5 h-6 w-6 text-green-600 shrink-0" />
+                  )}
                   <div className="flex-1">
-                    <h3 className="font-bold text-base text-green-950">
-                      Check-In Pasien Berhasil!
+                    <h3 className="font-bold text-base">
+                      {checkInResult.data?.is_completed || checkInResult.is_completed
+                        ? 'Pemeriksaan Pasien Sudah Selesai'
+                        : checkInResult.data?.already_checked_in || checkInResult.already_checked_in
+                        ? 'Pasien Sudah Terdaftar Antrean Sebelumnya'
+                        : 'Check-In Pasien Berhasil!'}
                     </h3>
-                    <p className="mt-0.5 text-xs text-green-800">
-                      Pasien telah diverifikasi hadir dan resmi terdaftar dalam antrean aktif.
+                    <p className="mt-0.5 text-xs">
+                      {checkInResult.data?.message ||
+                        checkInResult.message ||
+                        'Pasien telah diverifikasi hadir dan resmi terdaftar dalam antrean aktif.'}
                     </p>
+                    {(checkInResult.data?.patient_name || checkInResult.patient_name) && (
+                      <p className="mt-1 text-xs font-semibold">
+                        Pasien: {checkInResult.data?.patient_name || checkInResult.patient_name} (
+                        {checkInResult.data?.appointment_code || checkInResult.appointment_code})
+                      </p>
+                    )}
                     <div className="mt-3 flex items-center gap-3">
-                      <span className="text-xs font-semibold text-green-900">
-                        Nomor Antrean Diterbitkan:
+                      <span className="text-xs font-medium">Nomor Antrean:</span>
+                      <span
+                        className={`rounded-xl px-4 py-1.5 text-xl font-black text-white shadow ${
+                          checkInResult.data?.is_completed || checkInResult.is_completed
+                            ? 'bg-purple-800'
+                            : checkInResult.data?.already_checked_in || checkInResult.already_checked_in
+                            ? 'bg-amber-700'
+                            : 'bg-green-700'
+                        }`}
+                      >
+                        #{checkInResult.data?.queue_number || checkInResult.queue_number}
                       </span>
-                      <span className="rounded-xl bg-green-700 px-4 py-1.5 text-xl font-black text-white shadow">
-                        #{checkInResult.queue_number}
-                      </span>
+                      {(checkInResult.data?.already_checked_in || checkInResult.already_checked_in) && (
+                        <span className="rounded-md bg-amber-200/80 px-2 py-0.5 text-[10px] font-bold text-amber-900">
+                          Tidak Diduplikasi
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>

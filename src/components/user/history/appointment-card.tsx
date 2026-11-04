@@ -190,8 +190,17 @@ export function AppointmentCard({ appointment, remaining }: Props) {
         </div>
         <div>
           <dt className="text-neutral-600">No. antrean</dt>
-          <dd className="font-semibold tabular-nums text-lg text-[#1B1B7A]">
-            {appointment.queue_number ? `#${appointment.queue_number}` : '-'}
+          <dd className="flex items-center gap-1.5 font-semibold tabular-nums text-lg text-[#1B1B7A]">
+            <span>{appointment.queue_number ? `#${appointment.queue_number}` : '-'}</span>
+            {isCheckedIn ? (
+              <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-800">
+                Aktif
+              </span>
+            ) : (
+              <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800">
+                Belum Scan
+              </span>
+            )}
           </dd>
         </div>
         <div>
@@ -272,41 +281,88 @@ export function AppointmentCard({ appointment, remaining }: Props) {
       {/* Modal Popup Barcode / QR Antrean */}
       {showQrModal && appointment.qr_token && (
         <Modal
-          title={`QR Barcode Antrean #${appointment.appointment_code}`}
+          title={
+            isCheckedIn
+              ? `Nomor Antrean #${appointment.appointment_code}`
+              : `Barcode Check-In #${appointment.appointment_code}`
+          }
           titleId={`qr-modal-${appointment.id}`}
           onClose={() => setShowQrModal(false)}
         >
           <div className="flex flex-col items-center space-y-4 text-center">
+            {/* Status Badge */}
+            <div className="flex justify-center">
+              <span
+                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold ${
+                  isCheckedIn
+                    ? 'border border-emerald-300 bg-emerald-100 text-emerald-800'
+                    : 'border border-amber-300 bg-amber-100 text-amber-900'
+                }`}
+              >
+                {isCheckedIn ? (
+                  <>
+                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                    <span>Sudah Check-In di Klinik</span>
+                  </>
+                ) : (
+                  <>
+                    <Clock className="h-3.5 w-3.5 text-amber-600" />
+                    <span>Menunggu Scan di Resepsionis</span>
+                  </>
+                )}
+              </span>
+            </div>
+
             <div className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
               <QRCodeSVG
                 value={`${appointment.appointment_code}:${appointment.qr_token}`}
-                size={220}
+                size={210}
                 level="M"
                 title={`QR reservasi ${appointment.appointment_code}`}
               />
             </div>
+
             <div className="space-y-1">
-              <p className="text-xs uppercase tracking-wider text-neutral-500 font-semibold">
-                Nomor Antrean
+              <p className="text-xs uppercase tracking-wider text-neutral-500 font-bold">
+                {isCheckedIn ? 'Nomor Antrean Resmi Anda' : 'Kode Reservasi'}
               </p>
-              <p className="text-4xl font-extrabold text-[#1B1B7A]">
-                {appointment.queue_number ? `#${appointment.queue_number}` : '-'}
+              <p className="text-4xl font-black text-[#1B1B7A]">
+                {isCheckedIn && appointment.queue_number
+                  ? `#${appointment.queue_number}`
+                  : appointment.appointment_code}
               </p>
               <p className="text-xs text-neutral-600 max-w-xs mt-2">
-                Tunjukkan QR code ini ke petugas resepsionis klinik untuk melakukan scan check-in kedatangan.
+                {isCheckedIn
+                  ? 'Nomor antrean Anda telah aktif. Anda dapat memantau giliran panggilan di ruang tunggu atau layar antrean.'
+                  : 'Tunjukkan barcode QR ini kepada petugas resepsionis klinik saat Anda tiba untuk mengaktifkan nomor antrean.'}
               </p>
             </div>
-            <div className="flex w-full justify-end gap-3 pt-3">
-              <button
-                type="button"
-                onClick={() => setShowQrModal(false)}
-                className={secondaryBtn}
-              >
-                Tutup
-              </button>
-              <Link href={`/payment/${appointment.id}`} className={primaryBtn}>
-                Buka Halaman Detail
-              </Link>
+
+            <div className="flex flex-wrap w-full justify-between items-center gap-2 pt-3 border-t border-neutral-100">
+              {isCheckedIn ? (
+                <Link
+                  href="/queue"
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#1B1B7A] hover:underline"
+                >
+                  Lihat Layar Antrean
+                </Link>
+              ) : (
+                <span className="text-[11px] text-neutral-500">
+                  Klinik Estetika & Kecantikan
+                </span>
+              )}
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowQrModal(false)}
+                  className={secondaryBtn}
+                >
+                  Tutup
+                </button>
+                <Link href={`/payment/${appointment.id}`} className={primaryBtn}>
+                  Detail
+                </Link>
+              </div>
             </div>
           </div>
         </Modal>

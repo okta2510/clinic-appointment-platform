@@ -240,10 +240,12 @@ export const useCheckIn = ({
 
       if (error) throw error;
 
+      const resData = (typeof data === 'object' && data !== null) ? data : {};
+
       return {
         success: true as const,
-        message: 'Pasien berhasil check-in',
-        data,
+        message: resData.message || 'Pasien berhasil diproses',
+        data: resData,
       };
     },
     onSuccess: (response) => {
