@@ -9,6 +9,8 @@ import type { TPatient, TPatientUpdate } from '@/types/patient';
 
 // GET /patients/me
 export const useGetMyPatient = () => {
+  const queryClient = useQueryClient();
+
   return useQuery<TApiSuccessResponse<TPatient>>({
     queryKey: ['get-my-patient'],
     retry: false,
@@ -16,9 +18,26 @@ export const useGetMyPatient = () => {
       const res = await apiClient.get<TApiSuccessResponse<any>>('/patients/me');
       const raw = res.data.data;
 
+      // Ambil email dari cache ['me'], response raw, atau localStorage
+      let email = raw.email || raw.users?.email || '';
+      if (!email && typeof window !== 'undefined') {
+        const cachedMe = queryClient.getQueryData<any>(['me']);
+        email = cachedMe?.email || localStorage.getItem('user_email') || '';
+      }
+
+      // Jika masih kosong, coba fetch /auth/me secara paralel
+      if (!email) {
+        try {
+          const meRes = await apiClient.get<TApiSuccessResponse<any>>('/auth/me');
+          if (meRes.data?.data?.email) {
+            email = meRes.data.data.email;
+          }
+        } catch {}
+      }
+
       const patientData: TPatient = {
         id: raw.id,
-        email: raw.email || raw.users?.email || '',
+        email,
         full_name: raw.full_name || raw.users?.full_name || '',
         phone_number: raw.phone_number || raw.users?.phone_number || '',
         role: (raw.role?.toUpperCase() || 'PATIENT') as 'PATIENT',
@@ -49,7 +68,13 @@ export const useUpdateMyPatient = ({
   return useMutation({
     mutationKey: ['update-my-patient'],
     mutationFn: async (body: TPatientUpdate) => {
-      const res = await apiClient.patch<TApiSuccessResponse<any>>('/patients/me', body);
+      // Pastikan tidak mengirim email kosong string "" yang memicu 422 di backend
+      const payload: any = { ...body };
+      if (!payload.email || typeof payload.email !== 'string' || !payload.email.trim()) {
+        delete payload.email;
+      }
+
+      const res = await apiClient.patch<TApiSuccessResponse<any>>('/patients/me', payload);
       const raw = res.data.data;
 
       const patientData: TPatient = {

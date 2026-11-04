@@ -30,6 +30,9 @@ export const useLogin = ({
       const { token, user } = res.data.data;
       if (typeof window !== 'undefined' && token) {
         localStorage.setItem('token', token);
+        if (user?.email) {
+          localStorage.setItem('user_email', user.email);
+        }
         // Set cookie document juga untuk kompatibilitas SSR
         document.cookie = `token=${encodeURIComponent(token)}; path=/; max-age=604800; SameSite=Lax`;
       }

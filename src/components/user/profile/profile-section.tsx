@@ -69,14 +69,17 @@ export function ProfileSection({ profile }: Props) {
     if (Object.keys(nextErrors).length > 0) return;
 
     // Kolom opsional yang dikosongkan dikirim sebagai null
-    updateProfile({
+    const payload: any = {
       full_name: draft.name.trim(),
-      email: draft.email.trim(),
       phone_number: draft.phone.replace(/[\s-]/g, ''),
       date_of_birth: draft.birthDate || null,
       gender: draft.gender || null,
       address: draft.address.trim() || null,
-    });
+    };
+    if (draft.email && draft.email.trim() && /^\S+@\S+\.\S+$/.test(draft.email.trim())) {
+      payload.email = draft.email.trim();
+    }
+    updateProfile(payload);
   }
 
   const describedBy = (field: keyof Profile) => (errors[field] ? `${field}-error` : undefined);
@@ -163,12 +166,14 @@ export function ProfileSection({ profile }: Props) {
                 name="email"
                 type="email"
                 autoComplete="email"
-                value={draft.email}
-                onChange={(event) => setField('email', event.target.value)}
-                aria-invalid={Boolean(errors.email)}
-                aria-describedby={describedBy('email')}
-                className={inputClass(errors.email)}
+                value={draft.email || profile.email}
+                disabled
+                title="Email login akun tidak dapat diubah"
+                className="mt-2 block w-full rounded-2xl border border-neutral-200 bg-neutral-100 px-4 py-3 text-neutral-500 cursor-not-allowed opacity-80"
               />
+              <span className="mt-1 block text-xs text-neutral-500">
+                Email terdaftar sebagai identitas login utama
+              </span>
             </Field>
 
             <Field id="phone" label="Nomor WhatsApp" error={errors.phone}>

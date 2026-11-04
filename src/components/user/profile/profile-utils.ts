@@ -46,9 +46,7 @@ export function validateProfile(profile: Profile): ProfileErrors {
   const newErrors: ProfileErrors = {};
   if (!profile.name.trim()) newErrors.name = 'Nama lengkap wajib diisi';
 
-  if (!profile.email.trim()) {
-    newErrors.email = 'Email wajib diisi';
-  } else if (!/^\S+@\S+\.\S+$/.test(profile.email)) {
+  if (profile.email && !/^\S+@\S+\.\S+$/.test(profile.email.trim())) {
     newErrors.email = 'Format email tidak valid';
   }
 
