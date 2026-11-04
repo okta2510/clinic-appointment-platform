@@ -150,17 +150,33 @@ function normalizeName(name: string) {
   return name.toLowerCase().replace(/&/g, 'and').replace(/\s+/g, ' ').trim();
 }
 
-// Spesialisasi dokter yang menangani treatment klinik:
-// - Dokter Umum & Spesialis Kulit & Kelamin menangani seluruh perawatan estetika & kulit
-// - Jika nama spesialisasi sama persis dengan kategori, cocokkan
-// - Sebagai fallback, seluruh dokter aktif di klinik dapat melayani konsultasi perawatan
+// Spesialisasi dokter estetika yang menangani treatment klinik kecantikan:
 export function isSpecialistForCategory(specialistName: string | undefined, category: Category) {
   if (!specialistName) return true;
   const s = normalizeName(specialistName);
   const c = normalizeName(category);
 
   if (s === c) return true;
-  if (s.includes('kulit') || s.includes('umum') || s.includes('estetika')) return true;
+
+  if (category === 'Hair') {
+    return s.includes('hair') || s.includes('rambut') || s.includes('trikologi') || s.includes('kulit') || s.includes('dermatologi');
+  }
+
+  if (category === 'Slimming') {
+    return s.includes('slimming') || s.includes('bedah') || s.includes('plastik') || s.includes('estetika') || s.includes('tubuh');
+  }
+
+  if (category === 'Anti-Aging') {
+    return s.includes('anti-aging') || s.includes('aging') || s.includes('bedah') || s.includes('estetika') || s.includes('dermatologi') || s.includes('kulit');
+  }
+
+  if (category === 'Acne & Scar') {
+    return s.includes('dermatologi') || s.includes('kulit') || s.includes('laser') || s.includes('scar') || s.includes('estetika') || s.includes('bedah');
+  }
+
+  if (category === 'Brightening') {
+    return s.includes('dermatologi') || s.includes('laser') || s.includes('estetika') || s.includes('kulit');
+  }
 
   return true;
 }

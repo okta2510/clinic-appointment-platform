@@ -31,7 +31,8 @@ Untuk memastikan pengembang baru (*new programmer*) dapat langsung berkontribusi
 Ikuti panduan lengkap di [INT.md](./INT.md) untuk membuat project Supabase, lalu jalankan file SQL berikut via SQL Editor Supabase:
 1. `supabase/migrations/20261103000000_init_schema.sql` (Skema tabel, RLS, Storage, & RPC Transaksional)
 2. `supabase/migrations/20261103000100_cron_jobs.sql` (Otomasi kedaluwarsa 30 menit via `pg_cron`)
-3. `supabase/seed.sql` (Data awal spesialisasi dokter dan jadwal praktik)
+3. `supabase/migrations/20261103000200_allow_ongoing_booking.sql` (Peningkatan RPC booking, Base64 payment, & check-in fleksibel)
+4. `supabase/wipe_and_seed_beauty_clinic.sql` (Wipe & seed ulang data klinik kecantikan, dokter estetika, jadwal hari ini, & akun demo)
 
 ### 3. Setup Lingkungan Lokal
 Salin file konfigurasi environment dan isi kredensial Supabase Anda:

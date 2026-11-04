@@ -1,54 +1,69 @@
 -- =============================================================================
--- Data contoh (seed) — Clinic Appointment Platform
+-- Data Seed Standar: Klinik Kecantikan & Estetika (Beauty & Aesthetic Clinic)
 -- =============================================================================
 
--- 1. Spesialisasi
-insert into public.specialists (id, name, description) values
-  ('11111111-0000-0000-0000-000000000001', 'Dokter Umum',              'Pemeriksaan kesehatan umum dan keluhan ringan'),
-  ('11111111-0000-0000-0000-000000000002', 'Spesialis Anak',           'Kesehatan bayi, anak, dan remaja'),
-  ('11111111-0000-0000-0000-000000000003', 'Spesialis Penyakit Dalam', 'Diabetes, hipertensi, dan penyakit organ dalam'),
-  ('11111111-0000-0000-0000-000000000004', 'Spesialis Kulit & Kelamin','Jerawat, alergi kulit, dan penyakit kelamin'),
-  ('11111111-0000-0000-0000-000000000005', 'Dokter Gigi',              'Perawatan dan pemeriksaan gigi'),
-  ('11111111-0000-0000-0000-000000000006', 'Spesialis Kandungan',      'Kehamilan dan kesehatan reproduksi wanita')
-on conflict (id) do nothing;
-
--- 2. Dokter (harga dalam Rupiah)
-insert into public.doctors (id, specialist_id, full_name, bio, experience_years, consultation_fee) values
-  ('22222222-0000-0000-0000-000000000001', '11111111-0000-0000-0000-000000000001', 'dr. Andi Pratama',            'Dokter umum yang ramah untuk keluhan sehari-hari.', 6, 100000),
-  ('22222222-0000-0000-0000-000000000002', '11111111-0000-0000-0000-000000000001', 'dr. Rina Kusuma',             'Berpengalaman di layanan klinik dan vaksinasi dewasa.', 9, 120000),
-  ('22222222-0000-0000-0000-000000000003', '11111111-0000-0000-0000-000000000002', 'dr. Siti Rahmawati, Sp.A',    'Fokus pada tumbuh kembang dan imunisasi anak.', 12, 250000),
-  ('22222222-0000-0000-0000-000000000004', '11111111-0000-0000-0000-000000000003', 'dr. Budi Santoso, Sp.PD',     'Menangani diabetes, hipertensi, dan kolesterol.', 15, 300000),
-  ('22222222-0000-0000-0000-000000000005', '11111111-0000-0000-0000-000000000004', 'dr. Maya Lestari, Sp.KK',     'Perawatan jerawat, eksim, dan alergi kulit.', 8, 275000),
-  ('22222222-0000-0000-0000-000000000006', '11111111-0000-0000-0000-000000000005', 'drg. Fajar Nugroho',          'Scaling, tambal gigi, dan konsultasi ortodonti.', 7, 150000),
-  ('22222222-0000-0000-0000-000000000007', '11111111-0000-0000-0000-000000000006', 'dr. Dewi Anggraini, Sp.OG',   'Pemeriksaan kehamilan dan USG.', 11, 350000)
-on conflict (id) do nothing;
-
--- 3. Jadwal mingguan (0 = Minggu ... 6 = Sabtu)
-insert into public.doctor_schedules (doctor_id, day_of_week, start_time, end_time, patient_quota) values
-  ('22222222-0000-0000-0000-000000000001', 1, '08:00', '12:00', 15),
-  ('22222222-0000-0000-0000-000000000001', 3, '08:00', '12:00', 15),
-  ('22222222-0000-0000-0000-000000000001', 5, '13:00', '17:00', 15),
-  ('22222222-0000-0000-0000-000000000002', 2, '08:00', '12:00', 15),
-  ('22222222-0000-0000-0000-000000000002', 4, '13:00', '17:00', 15),
-  ('22222222-0000-0000-0000-000000000002', 6, '09:00', '12:00', 10),
-  ('22222222-0000-0000-0000-000000000003', 1, '10:00', '12:00', 10),
-  ('22222222-0000-0000-0000-000000000003', 4, '10:00', '12:00', 10),
-  ('22222222-0000-0000-0000-000000000004', 2, '16:00', '19:00', 8),
-  ('22222222-0000-0000-0000-000000000004', 5, '16:00', '19:00', 8),
-  ('22222222-0000-0000-0000-000000000005', 3, '13:00', '16:00', 10),
-  ('22222222-0000-0000-0000-000000000005', 6, '10:00', '13:00', 10),
-  ('22222222-0000-0000-0000-000000000006', 1, '13:00', '17:00', 8),
-  ('22222222-0000-0000-0000-000000000006', 4, '08:00', '12:00', 8),
-  ('22222222-0000-0000-0000-000000000007', 2, '09:00', '12:00', 6),
-  ('22222222-0000-0000-0000-000000000007', 5, '09:00', '12:00', 6)
-on conflict (doctor_id, day_of_week, start_time) do nothing;
-
--- -----------------------------------------------------------------------------
--- 4. Akun Demo Pengujian (Admin & Pasien) & Data Janji Temu Terkoneksi
--- -----------------------------------------------------------------------------
 create extension if not exists "pgcrypto";
 
--- Hapus dulu jika sebelumnya pernah ada row yang gagal/parsial
+-- 1. Spesialisasi Kecantikan & Estetika
+insert into public.specialists (id, name, description) values
+  ('11111111-0000-0000-0000-000000000001', 'Dermatologi, Venereologi & Estetika (Sp.D.V.E)', 'Diagnosis dan terapi medis jerawat aktif, hiperpigmentasi/melasma, dermatitis, serta perbaikan skin barrier rusak.'),
+  ('11111111-0000-0000-0000-000000000002', 'Dokter Estetika Medik & Anti-Aging (Dipl. AAAM)', 'Peremajaan wajah non-bedah: injeksi botox, dermal filler hyaluronic acid, thread lift (tarik benang), dan skin booster.'),
+  ('11111111-0000-0000-0000-000000000003', 'Bedah Plastik Rekonstruksi & Estetik (Sp.B.P.R.E)', 'Prosedur kontur estetika wajah, blefaroplasti (kelopak mata), revisi bopeng scar mendalam, dan rekonstruksi estetik.'),
+  ('11111111-0000-0000-0000-000000000004', 'Laser & Kosmetika Kulit (Advanced Laser Energy)', 'Teknologi canggih Pico Laser rejuvenasi, Fractional CO2 bopeng/pori, Yellow Laser vascular kemerahan, dan HIFU lifting.'),
+  ('11111111-0000-0000-0000-000000000005', 'Trikologi & Perawatan Kulit Kepala (Hair & Scalp)', 'Terapi kebotakan, penanganan kerontokan rambut kronis, Platelet-Rich Plasma (PRP) scalp therapy, dan stimulasi folikel.')
+on conflict (id) do update set
+  name = excluded.name,
+  description = excluded.description;
+
+-- 2. Dokter Estetika & Kecantikan
+insert into public.doctors (id, specialist_id, full_name, bio, experience_years, consultation_fee, photo_url, is_active) values
+  ('22222222-0000-0000-0000-000000000001', '11111111-0000-0000-0000-000000000001', 'dr. Maya Lestari, Sp.D.V.E, FINSDV', 'Dokter spesialis dermatologi lulusan Universitas Indonesia dengan fellowship laser di Seoul. Ahli dalam menangani acne vulgaris derajat berat, melasma hormonal, dan peremajaan kulit sensitif.', 11, 250000, 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=400', true),
+  ('22222222-0000-0000-0000-000000000002', '11111111-0000-0000-0000-000000000002', 'dr. Gisella Valerie, Dipl. AAAM', 'Dokter estetika bersertifikasi American Academy of Aesthetic Medicine. Memiliki pengalaman internasional dalam facial harmonization, baby botox natural look, dan lip filler hidrasi.', 8, 180000, 'https://images.unsplash.com/photo-1594824813589-39f5c2eb7162?auto=format&fit=crop&q=80&w=400', true),
+  ('22222222-0000-0000-0000-000000000003', '11111111-0000-0000-0000-000000000003', 'dr. Kevin Prasetya, Sp.B.P.R.E', 'Spesialis bedah plastik estetik dengan fokus pada upper & lower blepharoplasty, revisi scar bopeng membandel, dan peremajaan kontur wajah proporsional dengan pemulihan minimal.', 14, 350000, 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=400', true),
+  ('22222222-0000-0000-0000-000000000004', '11111111-0000-0000-0000-000000000004', 'dr. Natasha Wijaya, M.Biomed (AAM)', 'Magister Anti-Aging Medicine lulusan Universitas Udayana. Ahli dalam protokol kombinasi Pico Laser, Radiofrequency Microneedling, dan chemical peeling pencerah untuk tekstur glass skin.', 9, 200000, 'https://images.unsplash.com/photo-1527613426441-4da17471b66d?auto=format&fit=crop&q=80&w=400', true),
+  ('22222222-0000-0000-0000-000000000005', '11111111-0000-0000-0000-000000000001', 'dr. Amanda Clarissa, Sp.D.V.E', 'Fokus pada penanganan skin barrier rusak akibat over-exfoliation, alergi kosmetik, rosacea, serta terapi injeksi Polynucleotide Salmon DNA untuk elastisitas kulit mendalam.', 7, 220000, 'https://images.unsplash.com/photo-1651008376811-b90baee60c1f?auto=format&fit=crop&q=80&w=400', true),
+  ('22222222-0000-0000-0000-000000000006', '11111111-0000-0000-0000-000000000005', 'dr. Reza Mahendra, Dipl. CIBTAC, AAAM', 'Pakar trikologi klinis yang berfokus pada terapi kerontokan rambut pria dan wanita, PRP Hair Restoration, serta teknologi body slimming dan pengencangan kulit non-invasif.', 6, 175000, 'https://images.unsplash.com/photo-1537368910025-700350fe46c7?auto=format&fit=crop&q=80&w=400', true)
+on conflict (id) do update set
+  specialist_id = excluded.specialist_id,
+  full_name = excluded.full_name,
+  bio = excluded.bio,
+  experience_years = excluded.experience_years,
+  consultation_fee = excluded.consultation_fee,
+  photo_url = excluded.photo_url,
+  is_active = excluded.is_active;
+
+-- 3. Jadwal Mingguan Dokter (0=Minggu ... 6=Sabtu)
+insert into public.doctor_schedules (doctor_id, day_of_week, start_time, end_time, patient_quota) values
+  ('22222222-0000-0000-0000-000000000001', 1, '09:00', '13:00', 12),
+  ('22222222-0000-0000-0000-000000000001', 3, '13:00', '17:00', 12),
+  ('22222222-0000-0000-0000-000000000001', 5, '09:00', '13:00', 12),
+  ('22222222-0000-0000-0000-000000000001', 0, '10:00', '15:00', 10),
+
+  ('22222222-0000-0000-0000-000000000002', 2, '10:00', '14:00', 10),
+  ('22222222-0000-0000-0000-000000000002', 4, '14:00', '18:00', 10),
+  ('22222222-0000-0000-0000-000000000002', 6, '10:00', '15:00', 12),
+  ('22222222-0000-0000-0000-000000000002', 0, '13:00', '17:00', 8),
+
+  ('22222222-0000-0000-0000-000000000003', 1, '14:00', '18:00', 8),
+  ('22222222-0000-0000-0000-000000000003', 4, '09:00', '13:00', 8),
+  ('22222222-0000-0000-0000-000000000003', 6, '13:00', '17:00', 8),
+
+  ('22222222-0000-0000-0000-000000000004', 2, '14:00', '19:00', 12),
+  ('22222222-0000-0000-0000-000000000004', 3, '09:00', '13:00', 10),
+  ('22222222-0000-0000-0000-000000000004', 5, '14:00', '19:00', 12),
+
+  ('22222222-0000-0000-0000-000000000005', 1, '10:00', '14:00', 10),
+  ('22222222-0000-0000-0000-000000000005', 2, '09:00', '13:00', 10),
+  ('22222222-0000-0000-0000-000000000005', 5, '10:00', '14:00', 10),
+
+  ('22222222-0000-0000-0000-000000000006', 3, '14:00', '18:00', 10),
+  ('22222222-0000-0000-0000-000000000006', 4, '10:00', '14:00', 10),
+  ('22222222-0000-0000-0000-000000000006', 6, '09:00', '13:00', 10)
+on conflict (doctor_id, day_of_week, start_time) do update set
+  end_time = excluded.end_time,
+  patient_quota = excluded.patient_quota;
+
+-- 4. Akun Pengujian & Janji Temu
 delete from auth.users where email in (
   'admin@klinik.test',
   'pasien@klinik.test',
@@ -59,15 +74,14 @@ delete from auth.users where email in (
 do $$
 declare
   v_admin_id      uuid := 'aaaaaaaa-1111-1111-1111-aaaaaaaaaaaa';
-  v_patient_id    uuid := 'bbbbbbbb-2222-2222-2222-bbbbbbbbbbbb'; -- Budi Pasien Demo (akun login pasien)
-  v_patient_id_2  uuid := 'bbbbbbbb-2222-2222-2222-cccccccccccc'; -- Siti Rahayu (pasien antrean #1)
-  v_patient_id_3  uuid := 'bbbbbbbb-2222-2222-2222-dddddddddddd'; -- Ahmad Fauzi (pasien menunggu bukti bayar)
+  v_patient_id    uuid := 'bbbbbbbb-2222-2222-2222-bbbbbbbbbbbb';
+  v_patient_id_2  uuid := 'bbbbbbbb-2222-2222-2222-cccccccccccc';
+  v_patient_id_3  uuid := 'bbbbbbbb-2222-2222-2222-dddddddddddd';
+  v_doc_maya      uuid := '22222222-0000-0000-0000-000000000001';
   v_session_today uuid := '44444444-0000-0000-0000-000000000001';
   v_session_past  uuid := '44444444-0000-0000-0000-000000000002';
-  v_doctor_id     uuid := '22222222-0000-0000-0000-000000000001';
   v_today         date := (now() at time zone 'Asia/Jakarta')::date;
 begin
-  -- 1. Buat User Admin Demo (admin@klinik.test / Admin123!)
   insert into auth.users (
     instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
     raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
@@ -76,7 +90,7 @@ begin
     '00000000-0000-0000-0000-000000000000', v_admin_id, 'authenticated', 'authenticated',
     'admin@klinik.test', crypt('Admin123!', gen_salt('bf')), now(),
     '{"provider":"email","providers":["email"]}'::jsonb,
-    '{"full_name":"Admin Utama Klinik"}'::jsonb, now(), now(),
+    '{"full_name":"Admin Utama Klinik Estetika"}'::jsonb, now(), now(),
     '', '', '', ''
   );
 
@@ -88,9 +102,8 @@ begin
     'email', now(), now(), now()
   );
 
-  update public.profiles set role = 'admin', full_name = 'Admin Utama Klinik' where id = v_admin_id;
+  update public.profiles set role = 'admin', full_name = 'Admin Utama Klinik Estetika' where id = v_admin_id;
 
-  -- 2. Buat User Pasien Demo Utama (pasien@klinik.test / Pasien123!)
   insert into auth.users (
     instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
     raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
@@ -113,7 +126,6 @@ begin
 
   update public.profiles set role = 'patient', full_name = 'Budi Pasien Demo', phone_number = '08123456789' where id = v_patient_id;
 
-  -- Buat Pasien 2 (Siti Rahayu) untuk antrean aktif #1
   insert into auth.users (
     instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
     raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
@@ -136,7 +148,6 @@ begin
 
   update public.profiles set role = 'patient', full_name = 'Siti Rahayu', phone_number = '08129876543' where id = v_patient_id_2;
 
-  -- Buat Pasien 3 (Ahmad Fauzi) untuk janji menunggu konfirmasi
   insert into auth.users (
     instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
     raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
@@ -159,36 +170,35 @@ begin
 
   update public.profiles set role = 'patient', full_name = 'Ahmad Fauzi', phone_number = '08137788990' where id = v_patient_id_3;
 
-  -- 3. Sesi Praktik Dokter Hari Ini (untuk live queue display & scanner)
+  -- Sesi Hari Ini
   insert into public.practice_sessions (
     id, doctor_id, session_date, start_time, end_time, starts_at, ends_at, patient_quota, current_queue_number
   ) values (
     v_session_today,
-    v_doctor_id,
+    v_doc_maya,
     v_today,
-    '08:00', '12:00',
+    '08:00', '23:00',
     (v_today + time '08:00') at time zone 'Asia/Jakarta',
-    (v_today + time '12:00') at time zone 'Asia/Jakarta',
+    (v_today + time '23:00') at time zone 'Asia/Jakarta',
     15,
-    1 -- antrean saat ini yang sedang dilayani adalah nomor 1
-  ) on conflict (doctor_id, session_date, start_time) do nothing;
+    1
+  ) on conflict (doctor_id, session_date, start_time) do update set
+    ends_at = (v_today + time '23:00') at time zone 'Asia/Jakarta',
+    patient_quota = 15;
 
-  -- Sesi Praktik Bulan Lalu (untuk data grafik statistik)
   insert into public.practice_sessions (
     id, doctor_id, session_date, start_time, end_time, starts_at, ends_at, patient_quota, current_queue_number
   ) values (
     v_session_past,
-    v_doctor_id,
-    v_today - 15,
-    '08:00', '12:00',
-    (v_today - 15 + time '08:00') at time zone 'Asia/Jakarta',
-    (v_today - 15 + time '12:00') at time zone 'Asia/Jakarta',
-    15,
+    v_doc_maya,
+    v_today - 14,
+    '09:00', '13:00',
+    (v_today - 14 + time '09:00') at time zone 'Asia/Jakarta',
+    (v_today - 14 + time '13:00') at time zone 'Asia/Jakarta',
+    12,
     2
   ) on conflict (doctor_id, session_date, start_time) do nothing;
 
-  -- 4. Sample Janji Temu Terkoneksi (Setiap pasien hanya memiliki 1 booking aktif per sesi)
-  -- Bersihkan sample appointment dan rating sebelumnya agar eksekusi seed 100% idempotent
   delete from public.ratings where appointment_id in (
     '55555555-0000-0000-0000-000000000001',
     '55555555-0000-0000-0000-000000000002',
@@ -203,57 +213,52 @@ begin
     '55555555-0000-0000-0000-000000000004'
   );
 
-  -- A. Janji Hari Ini 1 (Pasien: Siti Rahayu): Terkonfirmasi (done), sudah check-in, nomor antrean 1 (sedang dilayani)
   insert into public.appointments (
     id, code, patient_id, doctor_id, session_id, status, consultation_fee,
     payment_deadline, confirmed_at, booking_number, qr_token, checked_in_at, queue_number
   ) values (
-    '55555555-0000-0000-0000-000000000001', 'APT-DEMO-001',
-    v_patient_id_2, v_doctor_id, v_session_today, 'done', 100000,
+    '55555555-0000-0000-0000-000000000001', 'APT-BEAUTY-001',
+    v_patient_id_2, v_doc_maya, v_session_today, 'done', 250000,
     now() + interval '30 minutes', now() - interval '2 hours', 1,
     '99999999-0000-0000-0000-000000000001', now() - interval '30 minutes', 1
   );
 
-  -- B. Janji Hari Ini 2 (Pasien: Ahmad Fauzi): Menunggu Konfirmasi Bukti Transfer (tampil di admin/payment & dashboard)
   insert into public.appointments (
     id, code, patient_id, doctor_id, session_id, status, consultation_fee,
     payment_deadline, payment_proof_path, payment_uploaded_at, booking_number
   ) values (
-    '55555555-0000-0000-0000-000000000002', 'APT-DEMO-002',
-    v_patient_id_3, v_doctor_id, v_session_today, 'waiting_confirmation', 100000,
-    now() + interval '20 minutes', 'sample-proof.jpg', now() - interval '10 minutes', 2
+    '55555555-0000-0000-0000-000000000002', 'APT-BEAUTY-002',
+    v_patient_id_3, v_doc_maya, v_session_today, 'waiting_confirmation', 250000,
+    now() + interval '20 minutes',
+    'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="150"><rect width="300" height="150" fill="%23e0e7ff"/><text x="20" y="50" font-family="sans-serif" font-size="14" fill="%231e1b4b" font-weight="bold">Bukti Transfer Bank BCA</text><text x="20" y="80" font-family="sans-serif" font-size="12" fill="%234338ca">Nominal: Rp 250.000</text></svg>',
+    now() - interval '10 minutes', 2
   );
 
-  -- C. Janji Hari Ini 3 (Pasien: Budi Pasien Demo): Terkonfirmasi (done), punya QR token, belum check-in
-  -- Tampil di halaman /history akun pasien@klinik.test dan siap di-scan di /admin/queueManagement
-  -- Token QR untuk dites: 99999999-0000-0000-0000-000000000003
   insert into public.appointments (
     id, code, patient_id, doctor_id, session_id, status, consultation_fee,
     payment_deadline, confirmed_at, booking_number, qr_token
   ) values (
-    '55555555-0000-0000-0000-000000000003', 'APT-DEMO-003',
-    v_patient_id, v_doctor_id, v_session_today, 'done', 100000,
+    '55555555-0000-0000-0000-000000000003', 'APT-BEAUTY-003',
+    v_patient_id, v_doc_maya, v_session_today, 'done', 250000,
     now() + interval '30 minutes', now() - interval '1 hour', 3,
     '99999999-0000-0000-0000-000000000003'
   );
 
-  -- D. Janji Masa Lalu (Pasien: Budi Pasien Demo, sesi 15 hari lalu): Status done dengan rating bintang 5
   insert into public.appointments (
     id, code, patient_id, doctor_id, session_id, status, consultation_fee,
     payment_deadline, confirmed_at, booking_number, checked_in_at, queue_number
   ) values (
-    '55555555-0000-0000-0000-000000000004', 'APT-DEMO-PAST',
-    v_patient_id, v_doctor_id, v_session_past, 'done', 100000,
-    now() - interval '15 days', now() - interval '15 days', 1,
-    now() - interval '15 days', 1
+    '55555555-0000-0000-0000-000000000004', 'APT-BEAUTY-PAST',
+    v_patient_id, v_doc_maya, v_session_past, 'done', 250000,
+    now() - interval '14 days', now() - interval '14 days', 1,
+    now() - interval '14 days', 1
   );
 
-  -- Rating ulasan pasien untuk janji masa lalu
   insert into public.ratings (
     appointment_id, patient_id, doctor_id, rating, review, created_at
   ) values (
-    '55555555-0000-0000-0000-000000000004', v_patient_id, v_doctor_id, 5,
-    'Pelayanan dokter sangat memuaskan dan ramah.', now() - interval '15 days'
+    '55555555-0000-0000-0000-000000000004', v_patient_id, v_doc_maya, 5,
+    'Konsultasi masalah jerawat dan rekomendasi acne peeling dari dr. Maya sangat tepat sasaran. Wajah jauh lebih bersih dan skin barrier kembali sehat!',
+    now() - interval '14 days'
   );
-
 end $$;
