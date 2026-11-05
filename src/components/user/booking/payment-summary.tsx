@@ -1,3 +1,7 @@
+'use client';
+
+import { useState } from 'react';
+import { Check, Copy } from 'lucide-react';
 import { formatDate, formatRupiah, formatTime } from '@/lib/format';
 import { card } from '@/lib/styles';
 import type { TAppointment } from '@/types/appointment';
@@ -10,6 +14,24 @@ type Props = {
 // Ringkasan reservasi (kode, treatment, dokter, jadwal, total) di halaman pembayaran
 export function PaymentSummary({ appointment, status }: Props) {
   const session = appointment.practice_sessions;
+  const [copiedId, setCopiedId] = useState(false);
+
+  const handleCopyId = async () => {
+    try {
+      await navigator.clipboard.writeText(appointment.id);
+      setCopiedId(true);
+      setTimeout(() => setCopiedId(false), 2000);
+    } catch {
+      const el = document.createElement('textarea');
+      el.value = appointment.id;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand('copy');
+      document.body.removeChild(el);
+      setCopiedId(true);
+      setTimeout(() => setCopiedId(false), 2000);
+    }
+  };
 
   return (
     <section className={card} aria-label="Ringkasan reservasi">
@@ -20,8 +42,28 @@ export function PaymentSummary({ appointment, status }: Props) {
       </span>
       <dl className="mt-4 grid gap-3 sm:grid-cols-2">
         <div>
-          <dt className="text-sm text-neutral-600">Kode reservasi</dt>
-          <dd className="font-semibold">{appointment.appointment_code}</dd>
+          <dt className="text-sm text-neutral-600">Kode & ID reservasi</dt>
+          <dd className="mt-1 flex flex-wrap items-center gap-2">
+            <span className="font-semibold">{appointment.appointment_code}</span>
+            <button
+              type="button"
+              onClick={handleCopyId}
+              className="inline-flex items-center gap-1 rounded-lg border border-neutral-200 bg-neutral-50 px-2.5 py-1 text-xs font-semibold text-neutral-700 hover:border-[#1B1B7A] hover:bg-white hover:text-[#1B1B7A] transition active:scale-95"
+              title={`Salin ID Reservasi: ${appointment.id}`}
+            >
+              {copiedId ? (
+                <>
+                  <Check className="size-3 text-emerald-600" />
+                  <span className="text-emerald-700">ID Tersalin!</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="size-3 text-neutral-500" />
+                  <span>Salin ID</span>
+                </>
+              )}
+            </button>
+          </dd>
         </div>
         <div>
           <dt className="text-sm text-neutral-600">Treatment</dt>

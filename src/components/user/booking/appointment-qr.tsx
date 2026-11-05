@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { CheckCircle2, Clock, MonitorPlay, QrCode, Sparkles } from 'lucide-react';
+import { useState } from 'react';
+import { Check, CheckCircle2, Clock, Copy, MonitorPlay, QrCode, Sparkles } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import type { TAppointment } from '@/types/appointment';
 import { formatDate, formatTime } from '@/lib/format';
@@ -10,9 +11,28 @@ type Props = { appointment: TAppointment };
 
 // QR dan status antrean pasien (Sebelum check-in vs Sesudah check-in)
 export default function AppointmentQr({ appointment }: Props) {
+  const [copiedTarget, setCopiedTarget] = useState<'id' | 'code' | null>(null);
+
   if (!appointment.qr_token) return null;
 
   const isCheckedIn = Boolean(appointment.checked_in_at);
+
+  const handleCopy = async (text: string, target: 'id' | 'code') => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedTarget(target);
+      setTimeout(() => setCopiedTarget(null), 2000);
+    } catch {
+      const el = document.createElement('textarea');
+      el.value = text;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand('copy');
+      document.body.removeChild(el);
+      setCopiedTarget(target);
+      setTimeout(() => setCopiedTarget(null), 2000);
+    }
+  };
 
   return (
     <section
@@ -41,12 +61,51 @@ export default function AppointmentQr({ appointment }: Props) {
             <h2 id="qr-heading" className="text-base font-bold sm:text-lg">
               {isCheckedIn ? 'Status Antrean: Terverifikasi Hadir' : 'Tiket Check-In Klinik'}
             </h2>
-            <p className="text-xs text-neutral-600">
-              Kode Reservasi:{' '}
-              <span className="font-mono font-bold text-[#1B1B7A]">
-                {appointment.appointment_code}
+            <div className="flex flex-wrap items-center gap-1.5 text-xs text-neutral-600">
+              <span>
+                Kode:{' '}
+                <span className="font-mono font-bold text-[#1B1B7A]">
+                  {appointment.appointment_code}
+                </span>
               </span>
-            </p>
+              <button
+                type="button"
+                onClick={() => handleCopy(appointment.appointment_code, 'code')}
+                className="inline-flex items-center gap-1 rounded-md border border-neutral-200 bg-white px-1.5 py-0.5 text-[10px] font-medium text-neutral-600 hover:border-[#1B1B7A] hover:text-[#1B1B7A] transition active:scale-95"
+                title="Salin Kode Reservasi"
+              >
+                {copiedTarget === 'code' ? (
+                  <>
+                    <Check className="size-3 text-emerald-600" />
+                    <span className="text-emerald-700 font-semibold">Tersalin</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="size-3 text-neutral-500" />
+                    <span>Salin Kode</span>
+                  </>
+                )}
+              </button>
+              <span className="text-neutral-300">|</span>
+              <button
+                type="button"
+                onClick={() => handleCopy(appointment.id, 'id')}
+                className="inline-flex items-center gap-1 rounded-md border border-neutral-200 bg-white px-1.5 py-0.5 text-[10px] font-medium text-neutral-600 hover:border-[#1B1B7A] hover:text-[#1B1B7A] transition active:scale-95"
+                title={`Salin ID Reservasi: ${appointment.id}`}
+              >
+                {copiedTarget === 'id' ? (
+                  <>
+                    <Check className="size-3 text-emerald-600" />
+                    <span className="text-emerald-700 font-semibold">ID Tersalin</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="size-3 text-neutral-500" />
+                    <span>Salin ID</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
 
@@ -132,7 +191,25 @@ export default function AppointmentQr({ appointment }: Props) {
               <p className="mt-2 text-[10px] text-neutral-500 font-mono">
                 {appointment.appointment_code}
               </p>
-              <p className="text-[10px] text-neutral-400">Barcode Verifikasi</p>
+              <button
+                type="button"
+                onClick={() => handleCopy(appointment.id, 'id')}
+                className="mt-2 inline-flex items-center justify-center gap-1 rounded-lg border border-neutral-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-neutral-700 shadow-xs hover:border-[#1B1B7A] hover:bg-neutral-50 active:scale-95 transition"
+                title={`Salin ID: ${appointment.id}`}
+              >
+                {copiedTarget === 'id' ? (
+                  <>
+                    <Check className="size-3 text-emerald-600" />
+                    <span className="text-emerald-700 font-bold">ID Tersalin!</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="size-3 text-neutral-500" />
+                    <span>Salin ID</span>
+                  </>
+                )}
+              </button>
+              <p className="mt-1 text-[10px] text-neutral-400">Barcode Verifikasi</p>
             </div>
           </div>
         ) : (
@@ -147,9 +224,44 @@ export default function AppointmentQr({ appointment }: Props) {
                   title={`QR reservasi ${appointment.appointment_code}`}
                 />
               </div>
-              <p className="mt-2 text-xs font-mono font-bold text-[#1B1B7A]">
-                {appointment.appointment_code}
-              </p>
+              <div className="mt-3 flex flex-col items-center gap-2">
+                <div className="flex items-center justify-center gap-1.5">
+                  <span className="text-xs font-mono font-bold text-[#1B1B7A]">
+                    {appointment.appointment_code}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleCopy(appointment.appointment_code, 'code')}
+                    className="inline-flex items-center rounded-md border border-neutral-200 bg-white p-1 text-neutral-500 hover:border-[#1B1B7A] hover:text-[#1B1B7A] active:scale-95 transition"
+                    title="Salin Kode Reservasi"
+                    aria-label="Salin Kode Reservasi"
+                  >
+                    {copiedTarget === 'code' ? (
+                      <Check className="size-3 text-emerald-600" />
+                    ) : (
+                      <Copy className="size-3" />
+                    )}
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleCopy(appointment.id, 'id')}
+                  className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-neutral-300 bg-white px-3 py-1.5 text-xs font-semibold text-neutral-700 shadow-xs hover:border-[#1B1B7A] hover:bg-neutral-50 active:scale-95 transition"
+                  title={`Salin ID Reservasi: ${appointment.id}`}
+                >
+                  {copiedTarget === 'id' ? (
+                    <>
+                      <Check className="size-3.5 text-emerald-600" />
+                      <span className="font-bold text-emerald-700">ID Tersalin!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="size-3.5 text-neutral-500" />
+                      <span>Salin ID Reservasi</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
 
             <div className="flex-1 space-y-3 text-center sm:text-left">
