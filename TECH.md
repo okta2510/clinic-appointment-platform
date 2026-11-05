@@ -21,22 +21,22 @@ Aplikasi ini menggunakan pola arsitektur **3-Tier Modern** yang memadukan keanda
 │                                       - Bearer Token Injection          │
 │                                       - Auto Unwrap {success, data}     │
 │                                       - Centralized Error Interceptor   │
-└───────────────────────────────┬──────────────────┬──────────────────────┘
-                                │                  │
-              REST API (JSON)   │                  │ Supabase Realtime (WS)
-      HTTP http://localhost:8000/api/v1           │ & Storage Direct
-                                ▼                  │
-┌──────────────────────────────────────────────────┴──────────────────────┐
+└──────────────────────────────────────────────┬──────────────────────────┘
+                                               │
+                                               │ REST API (JSON)
+                                               │ HTTP http://localhost:8000/api/v1
+                                               ▼
+┌─────────────────────────────────────────────────────────────────────────┐
 │              TIER 2: BACKEND APPLICATION SERVER (Port 8000)             │
 │                                                                         │
 │   Express.js REST API Gateway (api-clinic-appointment)                  │
 │   ├── Authentication Middleware (JWT Bearer Token Validation)           │
 │   ├── Business Domain Controllers & Routes (/auth, /doctors, etc)       │
-│   └── Database Access Layer (Prisma ORM 7)                              │
-└───────────────────────────────┬─────────────────────────────────────────┘
-                                │
-                                │ Database Connection Pool (PostgreSQL 15+)
-                                ▼
+│   └── Database Access Layer (Prisma ORM 7 & Supabase Service Role)      │
+└──────────────────────────────────────────────┬──────────────────────────┘
+                                               │
+                                               │ Database Connection Pool & Service Role
+                                               ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
 │              TIER 3: SHARED DATABASE & SERVICES (Supabase Cloud)        │
 │                                                                         │
@@ -52,13 +52,13 @@ Aplikasi ini menggunakan pola arsitektur **3-Tier Modern** yang memadukan keanda
 ```
 
 ### Keunggulan Arsitektur 3-Tier Ini:
-1. **Pemisahan Perhatian (Separation of Concerns)**: Frontend murni berfokus pada pengalaman pengguna yang responsif, validasi antarmuka, dan visualisasi data. Logika otorisasi, relasi database, dan kalkulasi analitik ditangani oleh backend Express.js.
-2. **Database Bersama (Shared Single Source of Truth)**: Baik Express backend maupun Next.js frontend terhubung ke basis data PostgreSQL Supabase yang sama, menjamin seluruh transaksi, kuota, dan status sinkron secara instan.
+1. **Frontend Pure REST API (Tanpa Direct Supabase Call)**: Di fase ini frontend Next.js **sudah tidak memanggil Supabase secara langsung**. Seluruh query dan mutasi data (pencarian dokter, reservasi kuota, pembayaran, antrean, profil) dikirim ke Backend REST API Gateway (`/api/v1`).
+2. **Backend sebagai Single Authority**: Backend Express.js memegang kendali penuh atas autentikasi JWT, validasi skema (Zod), isolasi logika bisnis, dan interaksi langsung ke database PostgreSQL Supabase menggunakan kredensial server.
 3. **Komunikasi REST Terstandar (`src/lib/api-client.ts`)**:
    - Seluruh request secara otomatis menyertakan `Authorization: Bearer <token>` dari penyimpanan lokal/cookie.
    - Respons server dengan envelope standar `{ success: true, message, data, meta }` diproses secara seragam.
    - Interceptor menangani error status HTTP (`401 Unauthorized` redirect/logout, `403 Forbidden`, `404 Not Found`, `422/400 Validation`) dengan pesan yang ramah pengguna.
-4. **Realtime Display & Storage**: Layar monitor TV antrean (`/queue`) tetap memanfaatkan keunggulan Supabase Realtime CDC (`postgres_changes`) untuk pembaruan nomor antrean seketika tanpa jeda polling.
+4. **Keamanan & Konsistensi Data**: Klien web tidak memegang service-role key dan tidak terbebani oleh konfigurasi RLS database langsung. Semua otorisasi divalidasi terpusat pada middleware backend.
 
 ---
 

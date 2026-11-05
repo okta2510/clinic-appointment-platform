@@ -2,6 +2,9 @@
 
 Panduan langkah demi langkah untuk menghubungkan **Clinic Appointment Platform** ke **Supabase** (Database PostgreSQL, Autentikasi, Storage, Realtime, dan pg_cron).
 
+> [!IMPORTANT]
+> **Arsitektur Fase Ini**: Frontend Next.js **100% berkomunikasi melalui Backend REST API Gateway** (`NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1`) dan **TIDAK MEMANGGIL SUPABASE SECARA LANGSUNG**. Seluruh akses database, validasi autentikasi JWT, kuota, dan mutasi data dikelola oleh Backend Application Server (Express.js / Prisma). Dokumen ini berfungsi sebagai panduan provisioning dan pemeliharaan infrastruktur Supabase Cloud yang menjadi fondasi data backend service.
+
 Dokumen ini ditulis secara praktis agar pengembang baru dapat melakukan setup proyek dari nol hingga berjalan dalam waktu kurang dari 15 menit.
 
 ---

@@ -3,9 +3,9 @@
 Platform janji temu berbasis web untuk **satu klinik kecantikan & estetika dengan banyak dokter spesialis**. Pasien dapat mencari dokter, memilih sesi berkuota, mengunggah bukti pembayaran (countdown 30 menit), menerima tiket QR code, dan memantau antrean. Admin dan staf klinik mengelola jadwal dokter, memverifikasi pembayaran, melakukan scan QR check-in saat pasien tiba di klinik, memanggil nomor antrean di layar TV ruang tunggu (`/queue`), serta melihat laporan statistik.
 
 Proyek ini dibangun dengan arsitektur **3-Tier Modern**:
-- **Frontend**: **Next.js 16 (App Router, React 19, Tailwind CSS v4, daisyUI 5)** berjalan pada `http://localhost:3000`.
-- **Backend Application Server**: **Express.js REST API** (`api-clinic-appointment` + Prisma 7) berjalan pada `http://localhost:8000/api/v1`.
-- **Database & Services**: **PostgreSQL Supabase Cloud** bersama (RLS, Stored Procedures, Realtime CDC, dan Storage).
+- **Frontend**: **Next.js 16 (App Router, React 19, Tailwind CSS v4, daisyUI 5)** berjalan pada `http://localhost:3000`. Frontend mengonsumsi data murni melalui **Backend REST API Gateway** (`NEXT_PUBLIC_API_URL`) dan tidak melakukan query/mutasi data langsung ke Supabase.
+- **Backend Application Server**: **Express.js REST API** (`api-clinic-appointment` + Prisma 7) berjalan pada `http://localhost:8000/api/v1` sebagai *Single Source of Truth* untuk seluruh transaksi data, autentikasi, dan logika bisnis.
+- **Database & Services**: **PostgreSQL Supabase Cloud** (RLS, Stored Procedures, Realtime CDC, dan Storage).
 
 ---
 
@@ -159,11 +159,11 @@ src/
 │   ├── user/                # Organisme fitur pasien
 │   └── admin/               # Organisme fitur admin
 ├── hooks/
-│   ├── api/                 # React Query hooks penghubung Backend REST API & Supabase
+│   ├── api/                 # React Query hooks mengonsumsi Backend REST API via Axios
 │   └── use-*.ts             # Custom hook umum (debounce, countdown timer, dll)
 ├── lib/
 │   ├── api-client.ts        # Axios singleton: Bearer token injection, unbox envelope, error handling
-│   ├── supabase/            # Client Supabase untuk Auth session & Realtime CDC
+│   ├── supabase/            # Client Supabase (browser client untuk Realtime antrean TV)
 │   ├── format.ts            # Formatter mata uang IDR, tanggal, waktu Indonesia
 │   └── styles.ts            # Token desain Tailwind bersama
 ├── types/                   # Definisi tipe TypeScript

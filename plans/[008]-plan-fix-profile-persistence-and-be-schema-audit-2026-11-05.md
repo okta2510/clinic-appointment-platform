@@ -1,106 +1,130 @@
-# Plan [008] - Audit Skema Backend & Investigasi Persistensi Edit Profil Pasien (/profile)
+# Plan [008] - Audit Skema Backend & Investigasi Persistensi Edit Profil Pasien (/profile) via REST API
 
 **Tanggal Dibuat:** 2026-11-05  
-**Domain:** Pasien Profile, Supabase RLS, Prisma Schema & Backend Persistence  
-**Status:** DRAFT / WAITING APPROVAL  
+**Domain:** Pasien Profile, Backend REST API Gateway, Prisma & Database Persistence  
+**Prinsip Arsitektur:** **Frontend Murni Menggunakan Backend REST API (Tidak Memanggil Supabase Langsung)**  
+**Status:** PROPOSED & BACKEND ALIGNMENT PLAN  
 
 ---
 
-## 1. Pertanyaan User & Ringkasan Jawaban Cepat
+## 1. Konteks Arsitektur & Pertanyaan User
+
+### Prinsip Arsitektur Saat Ini:
+> **PENTING**: Di fase ini, frontend Next.js (`clinic-appointment-platform`) **SUDAH TIDAK MEMANGGIL SUPABASE SECARA LANGSUNG**.  
+> Seluruh komunikasi data, autentikasi, dan manipulasi profil pasien berjalan 100% melalui **Backend REST API Gateway** (`http://localhost:8000/api/v1`) via Axios `apiClient` (`src/lib/api-client.ts`).  
+> Database Supabase adalah infrastruktur data yang hanya diakses oleh **Backend Application Server** (Express.js / Prisma).
+
+---
 
 ### Pertanyaan 1: Apakah butuh request update Backend Schema untuk email, date of birth, dan gender?
-- **Date of Birth (`date_of_birth`)**: **TIDAK BUTUH**. Kolom `date_of_birth` (tipe `date`) sudah ada di skema database Supabase `public.profiles` dan sudah terdaftar di `prisma/schema.prisma` baris 57.
-- **Gender (`gender`)**: **TIDAK BUTUH**. Kolom `gender` (enum `male`, `female`, `other`) sudah ada di tabel `public.profiles` dan sudah terdaftar di `prisma/schema.prisma` baris 58.
-- **Email (`email`)**: **TIDAK PERLU UBAH SCHEMA TABEL PROFILES**.
-  - Di arsitektur Supabase, email adalah kredensial identitas akun login yang disimpan di tabel `auth.users`, bukan di `public.profiles`.
-  - Di frontend, input email sudah dikunci (**disabled / read-only**) karena email adalah identitas login utama akun.
-  - Yang dibutuhkan dari sisi backend hanyalah **membaca email dari sesi/auth token** saat `GET /patients/me` (agar respon tidak mengembalikan `email: ""`).
+- **Date of Birth (`date_of_birth`)**: **TIDAK BUTUH PERUBAHAN SKEMA**.
+  - Kolom `date_of_birth` (tipe `date`) sudah tersedia di skema database PostgreSQL `public.profiles` dan sudah terdaftar di `prisma/schema.prisma` baris 57.
+- **Gender (`gender`)**: **TIDAK BUTUH PERUBAHAN SKEMA**.
+  - Kolom `gender` dengan enum `male`, `female`, `other` sudah tersedia di skema database `public.profiles` dan sudah terdaftar di `prisma/schema.prisma` baris 58.
+- **Email (`email`)**: **TIDAK BUTUH PERUBAHAN SKEMA TABEL `profiles`**.
+  - Di arsitektur database, `email` adalah identitas akun autentikasi login (disimpan di `auth.users` dan tabel `users`).
+  - Di formulir data diri frontend (`/profile`), input email sudah tepat dikunci (**disabled / read-only**) karena email merupakan username identitas login akun.
+  - Yang dibutuhkan dari sisi backend API hanyalah: **Backend `GET /patients/me` wajib membaca dan mengembalikan email** dari sesi/token autentikasi JWT (`res.locals.auth.email`), agar response API tidak mengembalikan `email: ""`.
 
 ---
 
-### Pertanyaan 2: Mengapa perubahan tidak terjadi setelah reload?
-User mengisi perubahan (nama, tanggal lahir, jenis kelamin), menekan tombol simpan, namun saat halaman di-reload (F5), data kembali seperti semula (misal tanggal lahir dan gender kembali strip `-`).
+### Pertanyaan 2: Mengapa perubahan data diri tidak tersimpan setelah reload?
 
-**Akar Masalah (Root Cause):**
-Perubahan **tidak benar-benar tersimpan ke database PostgreSQL Supabase** saat `PATCH /patients/me` dieksekusi. Ini disebabkan oleh 3 faktor teknis di backend:
+Pengguna mengisi formulir (nama, nomor telepon, tanggal lahir, jenis kelamin, alamat), menekan tombol "Simpan perubahan", lalu me-reload halaman (F5), namun nilai tanggal lahir dan gender kembali kosong (`-`).
 
-1. **Kebijakan Row Level Security (RLS) Supabase Membatalkan UPDATE Pasien**:
-   - Di PostgreSQL Supabase, kebijakan RLS tabel `public.profiles` didefinisikan sebagai:
-     ```sql
-     CREATE POLICY "profiles: ubah milik sendiri"
-       ON public.profiles FOR UPDATE TO authenticated
-       USING (id = auth.uid())
-       WITH CHECK (id = auth.uid());
-     ```
-   - Di backend (`PatientService.updateMe`), backend menggunakan client dari `getSupabaseUserClient(userId)`.
-   - Jika cache memori backend kehilangan token pasien (misal karena backend nodemon reload atau token sesi habis), fungsi `getUserToken` beralih memanggil `getOrFetchAdminToken()` (Token Admin).
-   - Ketika request UPDATE dikirim ke Supabase menggunakan Admin Token, Supabase mendeteksi `auth.uid()` adalah ID Admin, sedangkan `id` baris yang di-update adalah ID Pasien.
-   - Karena policy UPDATE **tidak memiliki klausa `OR public.is_admin()`**, Supabase secara diam-diam membatalkan update tersebut (**0 baris ter-update**) tanpa melemparkan error (`{ data: [], count: 0 }`).
+**Akar Masalah (Root Cause) di Backend REST API Server:**
+Frontend telah memanggil `PATCH /api/v1/patients/me` secara benar melalui `apiClient`, namun **Backend API Express (`api-clinic-appointment`) gagal menyimpan data secara permanen ke database**. Hal ini disebabkan oleh:
+
+1. **Backend Memakai Token Klien yang Terhalang RLS saat Menyimpan**:
+   - Di `api-clinic-appointment/src/features/patient/patient.service.ts` (`updateMe`), backend menggunakan Supabase JS client (`getSupabaseUserClient(userId)`).
+   - Ketika request update dikirim ke database Supabase, token yang digunakan backend terkena aturan Row Level Security (RLS) PostgreSQL (`using (id = auth.uid())`).
+   - Karena token sesi di backend tidak match atau fallback ke admin token yang berbeda ID dengan pasien, Supabase menolak operasi UPDATE dan mengembalikan `0 baris ter-update` tanpa melemparkan error (`{ data: [], count: 0, error: null }`).
 2. **Ketiadaan Real Service Role Key di Backend `.env`**:
-   - Backend `.env` saat ini menggunakan publishable key untuk `SUPABASE_SERVICE_ROLE_KEY` (`sb_publishable_...`).
-   - Kunci ini terikat aturan RLS pengguna biasa dan tidak dapat melakukan bypass RLS layaknya secret service role key (`eyJ...`).
-3. **Prisma Fallback Selalu Gagal & Error Tertelan**:
-   - Backend memiliki blok fallback `prisma.profiles.update`.
-   - Namun di backend `.env`, `DATABASE_URL` disetel ke `postgresql://postgres:postgres@localhost:5432/postgres` (database lokal yang tidak aktif).
-   - Blok `try/catch` di backend menelan error tersebut tanpa memberi tahu pemanggil API.
-   - Hasilnya, `PATCH /patients/me` mengembalikan HTTP 200 OK dengan data lama yang belum ter-update!
+   - Backend `.env` menggunakan kunci publik (`sb_publishable_...`) untuk konfigurasi `SUPABASE_SERVICE_ROLE_KEY`. Kunci publik tidak memiliki izin bypass RLS layaknya secret service role key (`eyJ...`).
+3. **Prisma Fallback di Backend Mengarah ke `localhost:5432`**:
+   - Setelah Supabase update menghasilkan 0 baris, backend mencoba fallback `prisma.profiles.update`.
+   - Namun koneksi `DATABASE_URL` di backend `.env` mengarah ke database lokal yang mati (`postgresql://postgres:postgres@localhost:5432/postgres`), dan error tersebut ditelan oleh blok `catch {}`.
+   - Akibatnya, `PATCH /patients/me` mengembalikan status HTTP 200 OK, tetapi **data di database tidak pernah berubah**. Saat halaman di-reload, `GET /patients/me` mengambil data lama yang masih kosong.
 
 ---
 
 ## 2. Matriks Audit Skema Backend vs Frontend
 
-| Field | Status di `public.profiles` (Supabase) | Status di `prisma/schema.prisma` | Status di `patient.validator.ts` | Status di Frontend Form | Butuh Ubah Schema BE? |
+| Field | Status di Database (`public.profiles`) | Status di `prisma/schema.prisma` | Status di `patient.validator.ts` | Status di Frontend Form | Butuh Ubah Schema BE? |
 | :--- | :--- | :--- | :--- | :--- | :---: |
 | **`full_name`** | `text not null default ''` | `String @default("")` | `z.string().min(1).max(150)` | Input Text | **TIDAK** |
 | **`phone_number`** | `text` | `String?` | `z.string().min(1).max(20)` | Input Tel | **TIDAK** |
 | **`date_of_birth`** | `date` | `DateTime? @db.Date` | `z.iso.date().nullable()` | Input Date (`YYYY-MM-DD`) | **TIDAK** |
 | **`gender`** | `enum ('male','female','other')` | `enum gender?` | `z.enum(['male','female','other'])` | Select Dropdown | **TIDAK** |
 | **`address`** | `text` | `String?` | `z.string().trim().nullable()` | Textarea | **TIDAK** |
-| **`email`** | *Tidak ada* (di `auth.users`) | *Tidak ada* (di `user` legacy) | `z.email().optional()` | Input Disabled (Read-only) | **TIDAK** *(Cukup return email di GET)* |
+| **`email`** | Disimpan di `auth.users` | Disimpan di `user` (legacy) | `z.email().optional()` | Input Disabled (Read-only) | **TIDAK** *(Cukup return di GET)* |
 
 ---
 
-## 3. Rencana Solusi & Perbaikan (Action Plan)
+## 3. Rencana Solusi & Perbaikan di Layer Backend API (`api-clinic-appointment`)
 
-### Opsi Solusi A: Perbaikan Kebijakan RLS di Supabase (Paling Cepat & Aman)
-Tambahkan izin pada policy UPDATE tabel `public.profiles` agar admin atau service role dapat meng-update profil pasien, atau pastikan token pasien tersampaikan dengan benar.
-Query SQL yang dibutuhkan di Supabase:
-```sql
--- Izinkan admin mengupdate profil pasien (sehingga backend API yang bertindak sebagai admin/server bisa menyimpan perubahan profil pasien)
-DROP POLICY IF EXISTS "profiles: ubah milik sendiri" ON public.profiles;
-CREATE POLICY "profiles: ubah milik sendiri atau admin"
-  ON public.profiles FOR UPDATE TO authenticated
-  USING (id = auth.uid() OR public.is_admin())
-  WITH CHECK (id = auth.uid() OR public.is_admin());
+Karena frontend murni mengonsumsi REST API dan tidak mengakses database Supabase secara langsung, perbaikan dilakukan pada **Backend API Application Server**:
+
+```mermaid
+flowchart TD
+    subgraph Frontend["Frontend Next.js 16 (Port 3000)"]
+        UI["Halaman /profile (ProfileSection)"]
+        Hook["useUpdateMyPatient() / useGetMyPatient()"]
+        Client["Axios apiClient (Bearer Token)"]
+        UI --> Hook --> Client
+    end
+
+    subgraph BackendAPI["Backend REST API Express (Port 8000)"]
+        Route["Route: PATCH /patients/me & GET /patients/me"]
+        Controller["PatientController.updateMe() & getMe()"]
+        Service["PatientService: Eksekusi Update ke Database"]
+        Route --> Controller --> Service
+    end
+
+    subgraph Database["Database Supabase PostgreSQL"]
+        DB["Tabel public.profiles & auth.users"]
+    end
+
+    Client -->|HTTP REST JSON| Route
+    Service -->|Server Credentials / Service Role / Direct Pool| DB
 ```
-*Dampak:* Seketika query update dari backend (yang menggunakan token admin atau token user) akan sukses memperbarui kolom `date_of_birth`, `gender`, `full_name`, dan `address` di database Supabase!
 
-### Opsi Solusi B: Pasang Supabase Secret Service Role Key di Backend `.env`
-- Di project Supabase Dashboard -> Settings -> API -> Ambil **`service_role` secret key** (JWT yang diawali `eyJ...`).
-- Masukkan ke `/Users/oktaviardi/Okta/api-clinic-appointment/.env` pada baris:
-  `SUPABASE_SERVICE_ROLE_KEY=eyJ...`
-- *Dampak:* `getSupabaseClient()` di backend otomatis menggunakan hak superuser yang melewati (*bypass*) RLS, sehingga pembaruan profil dijamin 100% tersimpan ke database.
+### Rekomendasi Solusi Teknis di Backend:
 
-### Opsi Solusi C: Perbaikan Kode Backend `PatientService` (Jika Backend Repo Boleh Diubah)
-1. **Perbaiki `PatientService.getMe`**:
-   Sertakan email dari `res.locals.auth.email` agar respon profil mengembalikan email pengguna yang valid.
-2. **Tangani Error pada Supabase Update**:
-   Periksa hasil `{ data, error }` dari Supabase update dan lempar `AppError(500, error.message)` jika update gagal, bukan menelannya secara diam-diam.
+1. **Gunakan Koneksi Server-Level (Bypass RLS) pada `PatientService.updateMe`**:
+   - Di sisi backend server, operasi update data profil pasien yang sudah terotentikasi oleh `verifyToken` (`res.locals.auth.id`) harus dieksekusi dengan kredensial server backend (`service_role` key atau koneksi PostgreSQL Prisma langsung ke Supabase pooler), bukan dengan token klien yang terbatas oleh RLS.
+   - Dengan demikian, update terhadap `date_of_birth`, `gender`, `full_name`, `phone_number`, dan `address` dijamin 100% langsung tersimpan permanen ke tabel `public.profiles`.
+
+2. **Kembalikan Email Pasien pada `PatientService.getMe`**:
+   - Di `PatientService.getMe`, sertakan email dari token JWT (`res.locals.auth.email` atau lookup `auth.users`) ke dalam objek kembalian:
+     ```typescript
+     // Di PatientService.getMe
+     const profile = await this.findPatientOrFail(userId);
+     return {
+       ...profile,
+       email: authPayload?.email || profile.email || '',
+     };
+     ```
+   - Ini memastikan frontend menerima email akun pasien secara utuh sesuai kontrak `API.md` Bagian 2.1.
+
+3. **Frontend Tetap Bersih & Konsisten**:
+   - Frontend tidak perlu memanggil SDK Supabase atau mengubah kredensial.
+   - Formulir di `/profile` tetap memanggil `useUpdateMyPatient` dan `useGetMyPatient`.
+   - Email tetap dikunci sebagai *read-only* demi keamanan identitas login.
 
 ---
 
-## 4. Langkah Verifikasi
-1. Eksekusi query update policy RLS di Supabase (Opsi A) atau masukkan secret service role key (Opsi B).
-2. Login ke antarmuka web sebagai `pasien@klinik.test`.
-3. Buka halaman `/profile`.
-4. Klik **Edit data**.
-5. Ubah:
-   - Tanggal lahir: misal `17 Agustus 1995` (`1995-08-17`)
-   - Jenis kelamin: `Laki-laki` (`male`)
-   - Alamat: `Jl. Senopati No. 45, Jakarta Selatan`
-6. Klik **Simpan perubahan**.
-7. Lakukan **Reload / Refresh Halaman (F5)**:
-   - Pastikan tanggal lahir tetap `17 Agustus 1995`.
-   - Pastikan jenis kelamin tetap `Laki-laki`.
-   - Pastikan alamat tetap tersimpan.
+## 4. Langkah Verifikasi Pengujian
 
+1. Buka browser pada aplikasi web `http://localhost:3000/profile` (login sebagai `pasien@klinik.test`).
+2. Klik tombol **"Edit data"** pada kartu Data Diri.
+3. Ubah kolom:
+   - **Tanggal lahir**: pilih `17 Agustus 1995` (`1995-08-17`).
+   - **Jenis kelamin**: pilih `Laki-laki` (`male`).
+   - **Alamat**: isi `Jl. Senopati No. 45, Kebayoran Baru, Jakarta Selatan`.
+4. Klik tombol **"Simpan perubahan"**.
+5. Lakukan **Reload / Refresh Halaman (F5)**:
+   - Pastikan tanggal lahir tetap tampil sebagai `17 Agustus 1995`.
+   - Pastikan jenis kelamin tetap tampil sebagai `Laki-laki`.
+   - Pastikan alamat tetap tersimpan secara permanen.
+   - Pastikan tidak ada panggilan langsung ke Supabase dari browser network tab (seluruh panggilan adalah `GET /api/v1/patients/me` dan `PATCH /api/v1/patients/me`).

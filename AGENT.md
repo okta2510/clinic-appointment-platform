@@ -51,6 +51,7 @@ A web platform for **one Beauty & Aesthetic Clinic with multiple aesthetic and d
 
 ### Scope & Architectural Boundaries
 - **Follow BRIEF.md & PLAN.md strictly**: Only build features described in the roadmap.
+- **Frontend Pure REST API Rule**: Di fase ini frontend Next.js **SUDAH TIDAK MEMANGGIL SUPABASE SECARA LANGSUNG**. Seluruh query dan mutasi data frontend wajib menggunakan custom hooks di `src/hooks/api/*` yang memanggil `apiClient` (`src/lib/api-client.ts`) menuju Backend REST API Gateway (`http://localhost:8000/api/v1`). Komponen UI dilarang mengimpor atau memanggil Supabase client secara langsung untuk operasi data.
 - **External Backend Read-Only Rule**: Direktori backend `/Users/oktaviardi/Okta/api-clinic-appointment` adalah **STRICTLY READ-ONLY**. AI Agent dilarang keras mengubah, menambah, atau menghapus file apa pun di direktori backend tersebut saat bekerja di repo frontend ini.
 - **Strictly No Auto-Commit Rule**: Dilarang keras menjalankan perintah `git commit` tanpa konfirmasi dan persetujuan eksplisit dari pengguna. Seluruh perubahan wajib disimpan di working tree.
 - **Data Layer Standard**: Seluruh query dan mutasi data frontend wajib menggunakan custom hooks di `src/hooks/api/*` yang memanggil `apiClient` (`src/lib/api-client.ts`). Jangan melakukan fetch HTTP mentah di dalam komponen UI.
