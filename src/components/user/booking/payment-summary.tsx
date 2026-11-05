@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Check, Copy } from 'lucide-react';
+import { useGetDetailDoctor } from '@/hooks/api/use-doctors';
 import { formatDate, formatRupiah, formatTime } from '@/lib/format';
 import { card } from '@/lib/styles';
 import type { TAppointment } from '@/types/appointment';
@@ -15,6 +16,23 @@ type Props = {
 export function PaymentSummary({ appointment, status }: Props) {
   const session = appointment.practice_sessions;
   const [copiedId, setCopiedId] = useState(false);
+
+  const doctorId = appointment.doctors?.id;
+  const isDoctorPlaceholder =
+    !appointment.doctors?.full_name ||
+    appointment.doctors.full_name === 'Dokter' ||
+    appointment.doctors.full_name.trim() === '';
+
+  const { data: doctorDetailData, isPending: isDoctorLoading } = useGetDetailDoctor(
+    isDoctorPlaceholder && doctorId ? doctorId : undefined,
+  );
+
+  const resolvedDoctorName =
+    (!isDoctorPlaceholder ? appointment.doctors?.full_name : doctorDetailData?.data?.full_name) ||
+    appointment.doctors?.full_name ||
+    (isDoctorLoading ? 'Memuat dokter...' : 'Dokter Spesialis');
+
+  const specialistName = doctorDetailData?.data?.specialists?.name;
 
   const handleCopyId = async () => {
     try {
@@ -71,7 +89,14 @@ export function PaymentSummary({ appointment, status }: Props) {
         </div>
         <div>
           <dt className="text-sm text-neutral-600">Dokter</dt>
-          <dd className="font-semibold">{appointment.doctors.full_name}</dd>
+          <dd className="font-semibold text-neutral-900">
+            {resolvedDoctorName}
+            {specialistName && (
+              <span className="block text-xs font-normal text-neutral-500">
+                {specialistName}
+              </span>
+            )}
+          </dd>
         </div>
         <div>
           <dt className="text-sm text-neutral-600">Jadwal</dt>

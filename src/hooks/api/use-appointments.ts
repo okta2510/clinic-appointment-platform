@@ -22,8 +22,8 @@ import type {
 } from '@/types/appointment';
 
 function normalizePatientAppointment(row: any, publicUrlBase: string): TAppointment {
-  const doctor = row.doctors || {};
-  const session = row.practice_sessions || {};
+  const doctor = row.doctor || row.doctors || row.Doctor || {};
+  const session = row.practice_session || row.practice_sessions || row.PracticeSession || {};
   const fee = Number(row.consultation_fee) || 0;
   const deadline = row.payment_deadline ? new Date(row.payment_deadline).getTime() : 0;
   const now = Date.now();
@@ -66,8 +66,8 @@ function normalizePatientAppointment(row: any, publicUrlBase: string): TAppointm
       : null,
     created_at: row.created_at,
     doctors: {
-      id: doctor.id || row.doctor_id,
-      full_name: doctor.full_name || 'Dokter',
+      id: doctor.id || row.doctor_id || '',
+      full_name: doctor.full_name || doctor.name || row.doctor_name || 'Dokter',
       photo: doctor.photo_url || doctor.photo || null,
     },
     treatments: {
@@ -76,10 +76,10 @@ function normalizePatientAppointment(row: any, publicUrlBase: string): TAppointm
       name: 'Konsultasi Dokter & Treatment',
     },
     practice_sessions: {
-      id: session.id || row.session_id,
-      session_date: session.session_date || new Date().toISOString(),
-      start_time: session.start_time || '08:00',
-      end_time: session.end_time || '12:00',
+      id: session.id || row.session_id || '',
+      session_date: session.session_date || row.session_date || new Date().toISOString(),
+      start_time: session.start_time || row.start_time || '08:00',
+      end_time: session.end_time || row.end_time || '12:00',
     },
     payment_proofs: proofUrl
       ? [
